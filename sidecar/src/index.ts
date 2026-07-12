@@ -232,18 +232,43 @@ function parseOpenConnectionOptions(
     "connection.open payload",
   );
 
+  const knownHostFingerprint =
+    optionalString(
+      value,
+      "knownHostFingerprint",
+    );
+
   return {
     connectionId: requireString(
       value,
       "connectionId",
     ),
+
     options: {
-      host: requireString(value, "host"),
-      port: parsePort(value.port),
-      username: requireString(value, "username"),
-      authentication: parseAuthentication(
-        value.authentication,
+      host: requireString(
+        value,
+        "host",
       ),
+
+      port: parsePort(
+        value.port,
+      ),
+
+      username: requireString(
+        value,
+        "username",
+      ),
+
+      authentication:
+        parseAuthentication(
+          value.authentication,
+        ),
+
+      ...(knownHostFingerprint
+        ? {
+          knownHostFingerprint,
+        }
+        : {}),
     },
   };
 }

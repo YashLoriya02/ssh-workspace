@@ -34,11 +34,62 @@ import type {
 
 interface RemoteFileExplorerProps {
     connectionId: string;
+    isActive: boolean;
 }
 
 interface Breadcrumb {
     label: string;
     path: string;
+}
+
+interface LoadDirectoryOptions {
+    forceRefresh?: boolean;
+}
+
+const DEFAULT_DIRECTORY_CACHE_KEY =
+    "__default_remote_directory__";
+
+function getDirectoryCacheKey(
+    remotePath?: string,
+): string {
+    const normalizedPath =
+        remotePath?.trim();
+
+    return normalizedPath ||
+        DEFAULT_DIRECTORY_CACHE_KEY;
+}
+
+function getRemoteParentDirectory(
+    remotePath: string,
+): string {
+    const normalizedPath =
+        remotePath.replace(
+            /\/+$/u,
+            "",
+        );
+
+    if (
+        !normalizedPath ||
+        normalizedPath === "/"
+    ) {
+        return "/";
+    }
+
+    const lastSlashIndex =
+        normalizedPath.lastIndexOf("/");
+
+    if (lastSlashIndex < 0) {
+        return ".";
+    }
+
+    if (lastSlashIndex === 0) {
+        return "/";
+    }
+
+    return normalizedPath.slice(
+        0,
+        lastSlashIndex,
+    );
 }
 
 function formatFileSize(bytes: number): string {
@@ -156,6 +207,7 @@ function buildBreadcrumbs(
 
 export function RemoteFileExplorer({
     connectionId,
+    isActive,
 }: RemoteFileExplorerProps) {
     const [listing, setListing] =
         useState<RemoteDirectoryListing | null>(
@@ -181,6 +233,19 @@ export function RemoteFileExplorer({
                 : [],
         [listing],
     );
+
+    const directoryCacheRef =
+        useRef<
+            Map<
+                string,
+                RemoteDirectoryListing
+            >
+        >(
+            new Map(),
+        );
+
+    const latestDirectoryRequestRef =
+        useRef(0);
 
     const dropTargetRef =
         useRef<HTMLElement | null>(null);
@@ -405,6 +470,11 @@ export function RemoteFileExplorer({
     }
 
     useEffect(() => {
+        if (!isActive) {
+            setIsDraggingFiles(false);
+            return;
+        }
+
         let unlisten:
             | (() => void)
             | undefined;
@@ -501,13 +571,54 @@ export function RemoteFileExplorer({
             disposed = true;
             unlisten?.();
         };
-    }, [uploadFiles]);
+    }, [uploadFiles, isActive]);
 
     const loadDirectory = useCallback(
-        async (remotePath?: string): Promise<void> => {
-            setLoading(true);
+        async (
+            remotePath?: string,
+            options: LoadDirectoryOptions = {},
+        ): Promise<void> => {
+            const requestId =
+                latestDirectoryRequestRef.current + 1;
+
+            latestDirectoryRequestRef.current =
+                requestId;
+
+            const cacheKey =
+                getDirectoryCacheKey(
+                    remotePath,
+                );
+
+            const cachedListing =
+                directoryCacheRef.current.get(
+                    cacheKey,
+                );
+
             setErrorMessage("");
             setSelectedPath(null);
+
+            /*
+             * Return immediately from the session cache.
+             * This also invalidates any older request that
+             * may still be running.
+             */
+            if (
+                cachedListing &&
+                !options.forceRefresh
+            ) {
+                setListing(
+                    cachedListing,
+                );
+
+                setPathInput(
+                    cachedListing.path,
+                );
+
+                setLoading(false);
+                return;
+            }
+
+            setLoading(true);
 
             try {
                 const result =
@@ -516,16 +627,61 @@ export function RemoteFileExplorer({
                         remotePath,
                     );
 
+                /*
+                 * Store the result under both:
+                 *
+                 * 1. The requested path
+                 * 2. The canonical path returned by SFTP
+                 *
+                 * This is especially useful for the initial
+                 * home-directory request where remotePath is
+                 * undefined.
+                 */
+                directoryCacheRef.current.set(
+                    cacheKey,
+                    result,
+                );
+
+                directoryCacheRef.current.set(
+                    getDirectoryCacheKey(
+                        result.path,
+                    ),
+                    result,
+                );
+
+                /*
+                 * Ignore an older response if the user has
+                 * already opened another directory.
+                 */
+                if (
+                    requestId !==
+                    latestDirectoryRequestRef.current
+                ) {
+                    return;
+                }
+
                 setListing(result);
                 setPathInput(result.path);
             } catch (error) {
+                if (
+                    requestId !==
+                    latestDirectoryRequestRef.current
+                ) {
+                    return;
+                }
+
                 setErrorMessage(
                     error instanceof Error
                         ? error.message
                         : String(error),
                 );
             } finally {
-                setLoading(false);
+                if (
+                    requestId ===
+                    latestDirectoryRequestRef.current
+                ) {
+                    setLoading(false);
+                }
             }
         },
         [connectionId],
@@ -542,19 +698,40 @@ export function RemoteFileExplorer({
                 }
 
                 const transfer =
-                    event.payload as TransferEventPayload;
+                    event.payload as
+                    TransferEventPayload;
 
                 if (
                     transfer.connectionId !==
                     connectionId ||
-                    transfer.direction !== "upload"
+                    transfer.direction !==
+                    "upload"
                 ) {
                     return;
                 }
 
-                void loadDirectory(
-                    listing?.path,
+                const uploadedDirectory =
+                    getRemoteParentDirectory(
+                        transfer.remotePath,
+                    );
+
+                directoryCacheRef.current.delete(
+                    getDirectoryCacheKey(
+                        uploadedDirectory,
+                    ),
                 );
+
+                if (
+                    listing?.path ===
+                    uploadedDirectory
+                ) {
+                    void loadDirectory(
+                        uploadedDirectory,
+                        {
+                            forceRefresh: true,
+                        },
+                    );
+                }
             },
         );
     }, [
@@ -562,7 +739,6 @@ export function RemoteFileExplorer({
         listing?.path,
         loadDirectory,
     ]);
-
 
     async function handleDownload(
         entry: RemoteFileEntry,
@@ -680,6 +856,9 @@ export function RemoteFileExplorer({
                         onClick={() =>
                             void loadDirectory(
                                 listing?.path,
+                                {
+                                    forceRefresh: true,
+                                },
                             )
                         }
                         disabled={loading}

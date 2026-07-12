@@ -21,6 +21,7 @@ export interface OpenConnectionOptions {
     port: number;
     username: string;
     authentication: SshAuthentication;
+    knownHostFingerprint?: string;
 }
 
 export interface BackendEvent {
@@ -199,6 +200,66 @@ export class ConnectionManager {
                         ? key
                         : Buffer.from(key, "hex");
 
+                    const fingerprint =
+                        this.createFingerprint(rawKey);
+
+                    const keyType =
+                        this.getKeyType(rawKey);
+
+                    const expectedFingerprint =
+                        options.knownHostFingerprint;
+
+                    /*
+                     * The host has previously been trusted.
+                     * Only accept it when the new fingerprint
+                     * exactly matches the stored fingerprint.
+                     */
+                    if (expectedFingerprint) {
+                        if (
+                            fingerprint ===
+                            expectedFingerprint
+                        ) {
+                            this.sendEvent({
+                                type: "connection.hostKeyVerified",
+                                payload: {
+                                    connectionId,
+
+                                    host: options.host,
+                                    port: options.port,
+
+                                    keyType,
+                                    fingerprint,
+                                },
+                            });
+
+                            callback(true);
+                            return;
+                        }
+
+                        this.sendEvent({
+                            type: "connection.hostKeyMismatch",
+                            payload: {
+                                connectionId,
+
+                                host: options.host,
+                                port: options.port,
+
+                                keyType,
+
+                                expectedFingerprint,
+                                receivedFingerprint:
+                                    fingerprint,
+                            },
+                        });
+
+                        callback(false);
+                        return;
+                    }
+
+                    /*
+                     * First connection to this host.
+                     * Ask the user to approve the key.
+                     */
                     this.requestHostApproval(
                         connectionId,
                         options,

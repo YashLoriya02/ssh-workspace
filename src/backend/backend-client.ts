@@ -118,6 +118,30 @@ export interface SshConnectionConfig {
     port: number;
     username: string;
     authentication: SshAuthentication;
+
+    knownHostFingerprint?: string;
+}
+
+export interface HostKeyVerifiedEvent {
+    connectionId: string;
+
+    host: string;
+    port: number;
+
+    keyType: string;
+    fingerprint: string;
+}
+
+export interface HostKeyMismatchEvent {
+    connectionId: string;
+
+    host: string;
+    port: number;
+
+    keyType: string;
+
+    expectedFingerprint: string;
+    receivedFingerprint: string;
 }
 
 export interface HostKeyApprovalEvent {
@@ -161,9 +185,8 @@ export class BackendClient {
         connectionId: string,
         cols: number,
         rows: number,
+        terminalId: string = crypto.randomUUID(),
     ): Promise<string> {
-        const terminalId = crypto.randomUUID();
-
         const response = await this.sendRequest(
             "terminal.open",
             {
