@@ -82,6 +82,28 @@ export interface RemoteTextFileSnapshot {
     readOnly: boolean;
 }
 
+export type RemoteImageMimeType =
+    | "image/png"
+    | "image/jpeg"
+    | "image/gif"
+    | "image/webp"
+    | "image/bmp"
+    | "image/x-icon";
+
+export interface RemoteImageSnapshot {
+    path: string;
+    name: string;
+
+    contentBase64: string;
+    mimeType: RemoteImageMimeType;
+
+    size: number;
+    modifiedAt: number | null;
+    permissions: string | null;
+
+    revision: string;
+}
+
 export interface SaveRemoteTextFileOptions {
     connectionId: string;
     remotePath: string;
@@ -604,6 +626,33 @@ export class BackendClient {
 
         return response.payload as
             RemoteTextFileSnapshot;
+    }
+
+    async readRemoteImageFile(
+        connectionId: string,
+        remotePath: string,
+    ): Promise<RemoteImageSnapshot> {
+        const response =
+            await this.sendRequest(
+                "sftp.readImageFile",
+                {
+                    connectionId,
+                    remotePath,
+                },
+                45_000,
+            );
+
+        if (
+            response.type !==
+            "sftp.imageFile"
+        ) {
+            throw new Error(
+                `Expected sftp.imageFile but received ${response.type}.`,
+            );
+        }
+
+        return response.payload as
+            RemoteImageSnapshot;
     }
 
     async saveRemoteTextFile(

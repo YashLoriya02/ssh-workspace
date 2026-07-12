@@ -13,25 +13,102 @@ import {
     BackendRequestError,
     backendClient,
     type RemoteFileEntry,
-    type RemoteTextFileSnapshot,
 } from "../../backend/backend-client";
 
 import {
     createEditorTabFromSnapshot,
+    createImageTabFromSnapshot,
     encodeUtf8Base64,
     getRemoteEditorLanguage,
     getRemoteEditorModelPath,
+    isSupportedImageFileName,
 } from "./editor-utils";
 
 import {
     isRemoteEditorTabDirty,
     type RemoteEditorConflict,
-    type RemoteEditorTab,
     type RemoteFileChange,
+    type RemoteWorkspaceTab,
 } from "./editor-types";
 
 interface UseRemoteEditorWorkspaceOptions {
     connectionId: string;
+}
+
+function createLoadingTab(
+    connectionId: string,
+    entry: RemoteFileEntry,
+): RemoteWorkspaceTab {
+    if (
+        isSupportedImageFileName(
+            entry.name,
+        )
+    ) {
+        return {
+            kind: "image",
+
+            path: entry.path,
+            name: entry.name,
+
+            contentBase64: "",
+            mimeType: null,
+            revision: "",
+
+            size: entry.size,
+
+            modifiedAt:
+                entry.modifiedAt,
+
+            permissions:
+                entry.permissions,
+
+            status: "loading",
+            isReloading: false,
+
+            error: "",
+        };
+    }
+
+    return {
+        kind: "text",
+
+        path: entry.path,
+        name: entry.name,
+
+        modelPath:
+            getRemoteEditorModelPath(
+                connectionId,
+                entry.path,
+            ),
+
+        language:
+            getRemoteEditorLanguage(
+                entry.name,
+            ),
+
+        content: "",
+        savedContent: "",
+
+        revision: "",
+        encoding: "utf-8",
+
+        size: entry.size,
+
+        modifiedAt:
+            entry.modifiedAt,
+
+        permissions:
+            entry.permissions,
+
+        readOnly: false,
+
+        status: "loading",
+
+        isSaving: false,
+        isReloading: false,
+
+        error: "",
+    };
 }
 
 export function useRemoteEditorWorkspace({
@@ -41,12 +118,12 @@ export function useRemoteEditorWorkspace({
         tabs,
         setTabs,
     ] = useState<
-        RemoteEditorTab[]
+        RemoteWorkspaceTab[]
     >([]);
 
     const tabsRef =
         useRef<
-            RemoteEditorTab[]
+            RemoteWorkspaceTab[]
         >([]);
 
     const [
@@ -91,16 +168,17 @@ export function useRemoteEditorWorkspace({
     const updateTabs =
         useCallback(
             (
-                updater:
-                    (
-                        current:
-                            RemoteEditorTab[],
-                    ) =>
-                        RemoteEditorTab[],
+                updater: (
+                    current:
+                        RemoteWorkspaceTab[],
+                ) =>
+                    RemoteWorkspaceTab[],
             ): void => {
                 setTabs((current) => {
                     const next =
-                        updater(current);
+                        updater(
+                            current,
+                        );
 
                     tabsRef.current =
                         next;
@@ -168,59 +246,24 @@ export function useRemoteEditorWorkspace({
                 if (
                     openingPathsRef
                         .current
-                        .has(entry.path)
+                        .has(
+                            entry.path,
+                        )
                 ) {
                     return;
                 }
 
                 openingPathsRef
                     .current
-                    .add(entry.path);
+                    .add(
+                        entry.path,
+                    );
 
-                const loadingTab:
-                    RemoteEditorTab = {
-                    path: entry.path,
-                    name: entry.name,
-
-                    modelPath:
-                        getRemoteEditorModelPath(
-                            connectionId,
-                            entry.path,
-                        ),
-
-                    language:
-                        getRemoteEditorLanguage(
-                            entry.name,
-                        ),
-
-                    content: "",
-                    savedContent: "",
-
-                    revision: "",
-
-                    encoding:
-                        "utf-8",
-
-                    size:
-                        entry.size,
-
-                    modifiedAt:
-                        entry.modifiedAt,
-
-                    permissions:
-                        entry.permissions,
-
-                    readOnly: false,
-
-                    status:
-                        "loading",
-
-                    isSaving: false,
-                    isReloading:
-                        false,
-
-                    error: "",
-                };
+                const loadingTab =
+                    createLoadingTab(
+                        connectionId,
+                        entry,
+                    );
 
                 updateTabs(
                     (current) => [
@@ -230,18 +273,26 @@ export function useRemoteEditorWorkspace({
                 );
 
                 try {
-                    const snapshot =
-                        await backendClient
-                            .readRemoteTextFile(
+                    const loadedTab:
+                        RemoteWorkspaceTab =
+                        loadingTab.kind ===
+                            "image"
+                            ? createImageTabFromSnapshot(
+                                await backendClient
+                                    .readRemoteImageFile(
+                                        connectionId,
+                                        entry.path,
+                                    ),
+                            )
+                            : createEditorTabFromSnapshot(
                                 connectionId,
-                                entry.path,
-                            );
 
-                    const loadedTab =
-                        createEditorTabFromSnapshot(
-                            connectionId,
-                            snapshot,
-                        );
+                                await backendClient
+                                    .readRemoteTextFile(
+                                        connectionId,
+                                        entry.path,
+                                    ),
+                            );
 
                     updateTabs(
                         (current) =>
@@ -265,6 +316,9 @@ export function useRemoteEditorWorkspace({
 
                                             status:
                                                 "error",
+
+                                            isReloading:
+                                                false,
 
                                             error:
                                                 error instanceof
@@ -300,35 +354,26 @@ export function useRemoteEditorWorkspace({
                 updateTabs(
                     (current) =>
                         current.map(
-                            (tab) =>
-                                tab.path ===
-                                    remotePath
-                                    ? {
-                                        ...tab,
-                                        content,
-                                        error: "",
-                                    }
-                                    : tab,
+                            (tab) => {
+                                if (
+                                    tab.path !==
+                                        remotePath ||
+                                    tab.kind !==
+                                        "text"
+                                ) {
+                                    return tab;
+                                }
+
+                                return {
+                                    ...tab,
+                                    content,
+                                    error: "",
+                                };
+                            },
                         ),
                 );
             },
             [updateTabs],
-        );
-
-    const loadRemoteSnapshot =
-        useCallback(
-            async (
-                remotePath: string,
-            ): Promise<
-                RemoteTextFileSnapshot
-            > => {
-                return backendClient
-                    .readRemoteTextFile(
-                        connectionId,
-                        remotePath,
-                    );
-            },
-            [connectionId],
         );
 
     const reloadTab =
@@ -395,16 +440,26 @@ export function useRemoteEditorWorkspace({
                 );
 
                 try {
-                    const snapshot =
-                        await loadRemoteSnapshot(
-                            remotePath,
-                        );
+                    const loadedTab:
+                        RemoteWorkspaceTab =
+                        tab.kind ===
+                            "image"
+                            ? createImageTabFromSnapshot(
+                                await backendClient
+                                    .readRemoteImageFile(
+                                        connectionId,
+                                        remotePath,
+                                    ),
+                            )
+                            : createEditorTabFromSnapshot(
+                                connectionId,
 
-                    const loadedTab =
-                        createEditorTabFromSnapshot(
-                            connectionId,
-                            snapshot,
-                        );
+                                await backendClient
+                                    .readRemoteTextFile(
+                                        connectionId,
+                                        remotePath,
+                                    ),
+                            );
 
                     updateTabs(
                         (current) =>
@@ -454,7 +509,6 @@ export function useRemoteEditorWorkspace({
             },
             [
                 connectionId,
-                loadRemoteSnapshot,
                 updateTabs,
             ],
         );
@@ -475,6 +529,8 @@ export function useRemoteEditorWorkspace({
 
                 if (
                     !tab ||
+                    tab.kind !==
+                        "text" ||
                     tab.status !==
                         "ready" ||
                     tab.readOnly ||
@@ -498,18 +554,25 @@ export function useRemoteEditorWorkspace({
                 updateTabs(
                     (current) =>
                         current.map(
-                            (item) =>
-                                item.path ===
-                                    remotePath
-                                    ? {
-                                        ...item,
+                            (item) => {
+                                if (
+                                    item.path !==
+                                        remotePath ||
+                                    item.kind !==
+                                        "text"
+                                ) {
+                                    return item;
+                                }
 
-                                        isSaving:
-                                            true,
+                                return {
+                                    ...item,
 
-                                        error: "",
-                                    }
-                                    : item,
+                                    isSaving:
+                                        true,
+
+                                    error: "",
+                                };
+                            },
                         ),
                 );
 
@@ -544,16 +607,14 @@ export function useRemoteEditorWorkspace({
                                 (item) => {
                                     if (
                                         item.path !==
-                                        remotePath
+                                            remotePath ||
+                                        item.kind !==
+                                            "text"
                                     ) {
                                         return item;
                                     }
 
-                                    /*
-                                     * The user may have continued typing
-                                     * while the save request was running.
-                                     */
-                                    const contentChangedDuringSave =
+                                    const changedDuringSave =
                                         item.content !==
                                         contentToSave;
 
@@ -561,7 +622,7 @@ export function useRemoteEditorWorkspace({
                                         ...item,
 
                                         content:
-                                            contentChangedDuringSave
+                                            changedDuringSave
                                                 ? item.content
                                                 : savedContent,
 
@@ -619,29 +680,36 @@ export function useRemoteEditorWorkspace({
                     updateTabs(
                         (current) =>
                             current.map(
-                                (item) =>
-                                    item.path ===
-                                        remotePath
-                                        ? {
-                                            ...item,
+                                (item) => {
+                                    if (
+                                        item.path !==
+                                            remotePath ||
+                                        item.kind !==
+                                            "text"
+                                    ) {
+                                        return item;
+                                    }
 
-                                            isSaving:
-                                                false,
+                                    return {
+                                        ...item,
 
-                                            error:
-                                                error instanceof
-                                                    BackendRequestError &&
-                                                error.code ===
-                                                    "REMOTE_FILE_CHANGED"
-                                                    ? ""
-                                                    : error instanceof
-                                                        Error
-                                                        ? error.message
-                                                        : String(
-                                                            error,
-                                                        ),
-                                        }
-                                        : item,
+                                        isSaving:
+                                            false,
+
+                                        error:
+                                            error instanceof
+                                                BackendRequestError &&
+                                            error.code ===
+                                                "REMOTE_FILE_CHANGED"
+                                                ? ""
+                                                : error instanceof
+                                                    Error
+                                                    ? error.message
+                                                    : String(
+                                                        error,
+                                                    ),
+                                    };
+                                },
                             ),
                     );
 
@@ -666,8 +734,6 @@ export function useRemoteEditorWorkspace({
                             message:
                                 error.message,
                         });
-
-                        return false;
                     }
 
                     return false;
@@ -713,7 +779,7 @@ export function useRemoteEditorWorkspace({
                             [
                                 `"${tab.name}" has unsaved changes.`,
                                 "",
-                                "Close the editor without saving?",
+                                "Close without saving?",
                             ].join("\n"),
                             {
                                 title:

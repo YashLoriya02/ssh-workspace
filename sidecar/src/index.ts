@@ -729,6 +729,39 @@ async function handleRequest(
       return;
     }
 
+    case "sftp.readImageFile": {
+      const payload = requireRecord(
+        request.payload,
+        "sftp.readImageFile payload",
+      );
+
+      const connectionId =
+        requireString(
+          payload,
+          "connectionId",
+        );
+
+      const remotePath =
+        requireString(
+          payload,
+          "remotePath",
+        );
+
+      const snapshot =
+        await sftpManager.readImageFile(
+          connectionId,
+          remotePath,
+        );
+
+      sendMessage({
+        id: request.id,
+        type: "sftp.imageFile",
+        payload: snapshot,
+      });
+
+      return;
+    }
+
     case "sftp.saveTextFile": {
       const payload = requireRecord(
         request.payload,

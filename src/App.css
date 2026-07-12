@@ -39,6 +39,7 @@ button {
   color: #f3f5f8;
   background: #262d38;
   cursor: pointer;
+  font-size: 12px;
 }
 
 button:hover:not(:disabled) {
@@ -2399,7 +2400,7 @@ h1 {
   gap: 7px;
   padding: 0 11px;
 
-  border: 1px solid transparent;
+  border: 1px solid #2c3440;
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
 
@@ -2895,4 +2896,387 @@ h1 {
 
   min-height: 0;
   overflow: hidden;
+}
+
+.remote-image-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+
+  width: min(1500px, 100%);
+  height: auto;
+  min-height: 0;
+  margin: 0 auto;
+
+  overflow: hidden;
+
+  border: 1px solid #2e3744;
+  border-radius: 12px;
+
+  color: #d7dee9;
+  background: #0d1117;
+
+  box-shadow:
+    0 22px 60px rgba(0, 0, 0, 0.3);
+}
+
+.remote-image-panel--hidden {
+  display: none;
+}
+
+.remote-image-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  min-height: 54px;
+
+  gap: 16px;
+  padding: 8px 11px 8px 14px;
+
+  border-bottom: 1px solid #29313d;
+
+  background: #171c23;
+}
+
+.remote-image-toolbar__file {
+  display: grid;
+
+  min-width: 0;
+  gap: 3px;
+}
+
+.remote-image-toolbar__file strong {
+  display: flex;
+  align-items: center;
+
+  min-width: 0;
+  gap: 7px;
+
+  overflow: hidden;
+
+  color: #e3e8ef;
+
+  font-size: 12px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-image-toolbar__file strong svg {
+  flex: 0 0 auto;
+}
+
+.remote-image-toolbar__file>span {
+  overflow: hidden;
+
+  color: #707c8d;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-image-toolbar__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  gap: 6px;
+}
+
+.remote-image-tool,
+.remote-image-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 31px;
+  gap: 6px;
+  padding: 0 9px;
+
+  border-radius: 7px;
+
+  color: #a8b2c0;
+  background: #202731;
+
+  font-size: 10px;
+}
+
+.remote-image-tool--icon {
+  width: 31px;
+  padding: 0;
+}
+
+.remote-image-tool--active {
+  border-color: #4b6391;
+
+  color: #d5e0ff;
+  background: #263752;
+}
+
+.remote-image-download {
+  border-color: #3e5a88;
+
+  color: #c8d8ff;
+  background: #20304a;
+}
+
+.remote-image-download:hover:not(:disabled) {
+  border-color: #6384c0;
+
+  color: #ffffff;
+  background: #294061;
+}
+
+.remote-image-zoom {
+  display: inline-grid;
+
+  min-width: 44px;
+  height: 28px;
+
+  place-items: center;
+
+  color: #8f9aaa;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+}
+
+.remote-image-error {
+  flex: 0 0 auto;
+
+  max-height: 90px;
+  padding: 9px 12px;
+
+  overflow-y: auto;
+
+  border-bottom: 1px solid #60353b;
+
+  color: #ffabab;
+  background: #291719;
+
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.remote-image-body {
+  position: relative;
+
+  flex: 1 1 auto;
+  min-height: 0;
+
+  overflow: hidden;
+}
+
+.remote-image-stage {
+  width: 100%;
+  height: 100%;
+
+  user-select: none;
+
+  background-color: #11161d;
+  background-image:
+    linear-gradient(45deg,
+      rgba(255, 255, 255, 0.035) 25%,
+      transparent 25%),
+    linear-gradient(-45deg,
+      rgba(255, 255, 255, 0.035) 25%,
+      transparent 25%),
+    linear-gradient(45deg,
+      transparent 75%,
+      rgba(255, 255, 255, 0.035) 75%),
+    linear-gradient(-45deg,
+      transparent 75%,
+      rgba(255, 255, 255, 0.035) 75%);
+
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+
+  background-size:
+    16px 16px;
+}
+
+.remote-image-stage--fit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 22px;
+  overflow: hidden;
+}
+
+.remote-image-stage--custom {
+  display: block;
+
+  padding: 24px;
+  overflow: auto;
+
+  cursor: grab;
+}
+
+.remote-image-stage--panning {
+  cursor: grabbing;
+}
+
+.remote-image-preview {
+  display: block;
+
+  flex: 0 0 auto;
+
+  object-fit: contain;
+
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.42);
+
+  -webkit-user-drag: none;
+}
+
+.remote-image-preview--fit {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.remote-image-preview--custom {
+  max-width: none;
+  max-height: none;
+
+  margin: auto;
+}
+
+.remote-image-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+
+  gap: 10px;
+  padding: 28px;
+
+  color: #788596;
+
+  text-align: center;
+}
+
+.remote-image-state strong {
+  color: #cbd3df;
+
+  font-size: 13px;
+}
+
+.remote-image-state span {
+  max-width: 540px;
+
+  color: #7f8a99;
+
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.remote-image-state button {
+  margin-top: 7px;
+}
+
+.remote-image-statusbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  min-height: 29px;
+
+  gap: 15px;
+  padding: 0 10px;
+
+  border-top: 1px solid #28303b;
+
+  color: #747f8f;
+  background: #151a21;
+
+  font-size: 9px;
+}
+
+.remote-image-statusbar__path {
+  min-width: 0;
+  overflow: hidden;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-image-statusbar__details {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  gap: 13px;
+
+  white-space: nowrap;
+}
+
+/* Fixed viewport support */
+
+.workspace-page--editor .remote-image-panel {
+  flex: 1 1 auto;
+
+  height: auto;
+  min-height: 0;
+}
+
+@media (max-width: 950px) {
+  .remote-image-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .remote-image-toolbar__actions {
+    width: 100%;
+
+    overflow-x: auto;
+  }
+
+  .remote-image-tool,
+  .remote-image-download {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 650px) {
+  .remote-image-statusbar__path {
+    display: none;
+  }
+
+  .remote-image-statusbar {
+    justify-content: flex-end;
+  }
+
+  .remote-image-statusbar__details span:nth-child(4),
+  .remote-image-statusbar__details span:nth-child(5) {
+    display: none;
+  }
 }

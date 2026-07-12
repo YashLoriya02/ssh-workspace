@@ -11,7 +11,7 @@ import {
 
 import type {
     RemoteEditorConflict,
-    RemoteEditorTab,
+    RemoteTextEditorTab,
 } from "./editor-types";
 
 import {
@@ -24,7 +24,7 @@ import {
 
 interface RemoteEditorWorkspaceProps {
     tab:
-    RemoteEditorTab |
+    RemoteTextEditorTab |
     null;
 
     conflict:

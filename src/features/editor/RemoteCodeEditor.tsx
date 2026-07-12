@@ -13,11 +13,11 @@ import type * as Monaco from
 import "./monaco-setup";
 
 import type {
-    RemoteEditorTab,
+    RemoteTextEditorTab,
 } from "./editor-types";
 
 interface RemoteCodeEditorProps {
-    tab: RemoteEditorTab;
+    tab: RemoteTextEditorTab;
 
     isVisible: boolean;
 

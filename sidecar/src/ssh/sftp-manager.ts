@@ -47,6 +47,28 @@ export interface RemoteTextFileSnapshot {
     readOnly: boolean;
 }
 
+export type RemoteImageMimeType =
+    | "image/png"
+    | "image/jpeg"
+    | "image/gif"
+    | "image/webp"
+    | "image/bmp"
+    | "image/x-icon";
+
+export interface RemoteImageSnapshot {
+    path: string;
+    name: string;
+
+    contentBase64: string;
+    mimeType: RemoteImageMimeType;
+
+    size: number;
+    modifiedAt: number | null;
+    permissions: string | null;
+
+    revision: string;
+}
+
 export class SftpOperationError extends Error {
     constructor(
         public readonly code: string,
@@ -62,6 +84,7 @@ export class SftpOperationError extends Error {
 }
 
 const MAX_EDITABLE_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_PREVIEW_IMAGE_BYTES = 15 * 1024 * 1024;
 
 interface RemoteAttributes {
     mode?: number;
@@ -621,6 +644,9 @@ export class SftpManager {
             await this.readFileBuffer(
                 sftp,
                 remotePath,
+                MAX_EDITABLE_FILE_BYTES,
+                "REMOTE_FILE_TOO_LARGE",
+                "This remote file is too large to edit safely.",
             );
 
         this.assertEditableText(
@@ -658,6 +684,157 @@ export class SftpManager {
             content,
             latestAttributes,
         );
+    }
+
+    async readImageFile(
+        connectionId: string,
+        requestedPath: string,
+    ): Promise<RemoteImageSnapshot> {
+        const sftp =
+            await this.getSession(
+                connectionId,
+            );
+
+        const remotePath =
+            this.requireRemotePath(
+                requestedPath,
+                "remotePath",
+            );
+
+        const initialAttributes =
+            await this.lstat(
+                sftp,
+                remotePath,
+            );
+
+        const initialMode =
+            typeof initialAttributes.mode ===
+                "number"
+                ? initialAttributes.mode
+                : undefined;
+
+        const type =
+            this.getFileType(
+                initialMode,
+            );
+
+        if (type !== "file") {
+            throw new SftpOperationError(
+                "REMOTE_IMAGE_NOT_PREVIEWABLE",
+                "Only regular remote image files can be previewed.",
+                {
+                    remotePath,
+                    type,
+                },
+            );
+        }
+
+        this.assertFileSizeLimit(
+            initialAttributes.size,
+            remotePath,
+            MAX_PREVIEW_IMAGE_BYTES,
+            "REMOTE_IMAGE_TOO_LARGE",
+            "This remote image is too large to preview safely.",
+        );
+
+        const content =
+            await this.readFileBuffer(
+                sftp,
+                remotePath,
+                MAX_PREVIEW_IMAGE_BYTES,
+                "REMOTE_IMAGE_TOO_LARGE",
+                "This remote image is too large to preview safely.",
+            );
+
+        const mimeType =
+            this.detectImageMimeType(
+                content,
+            );
+
+        if (!mimeType) {
+            throw new SftpOperationError(
+                "REMOTE_IMAGE_FORMAT_UNSUPPORTED",
+                "This file is not a supported image format.",
+                {
+                    remotePath,
+
+                    supportedFormats: [
+                        "PNG",
+                        "JPEG",
+                        "GIF",
+                        "WebP",
+                        "BMP",
+                        "ICO",
+                    ],
+                },
+            );
+        }
+
+        const latestAttributes =
+            await this.lstat(
+                sftp,
+                remotePath,
+            );
+
+        const latestSize =
+            typeof latestAttributes.size ===
+                "number"
+                ? latestAttributes.size
+                : content.length;
+
+        if (
+            latestSize !==
+            content.length
+        ) {
+            throw new SftpOperationError(
+                "REMOTE_IMAGE_CHANGED_DURING_READ",
+                "The remote image changed while it was being opened. Please try again.",
+                {
+                    remotePath,
+                },
+            );
+        }
+
+        const latestMode =
+            typeof latestAttributes.mode ===
+                "number"
+                ? latestAttributes.mode
+                : undefined;
+
+        return {
+            path: remotePath,
+
+            name:
+                path.posix.basename(
+                    remotePath,
+                ),
+
+            contentBase64:
+                content.toString(
+                    "base64",
+                ),
+
+            mimeType,
+
+            size:
+                content.length,
+
+            modifiedAt:
+                typeof latestAttributes.mtime ===
+                    "number"
+                    ? latestAttributes.mtime
+                    : null,
+
+            permissions:
+                this.formatPermissions(
+                    latestMode,
+                ),
+
+            revision:
+                this.createRevision(
+                    content,
+                ),
+        };
     }
 
     closeForConnection(connectionId: string): void {
@@ -890,31 +1067,43 @@ export class SftpManager {
         );
     }
 
-    private assertEditableFileSize(
+    private assertFileSizeLimit(
         sizeValue: number | undefined,
         remotePath: string,
+        maximumSize: number,
+        errorCode: string,
+        errorMessage: string,
     ): void {
         const size =
             typeof sizeValue === "number"
                 ? sizeValue
                 : 0;
 
-        if (
-            size <=
-            MAX_EDITABLE_FILE_BYTES
-        ) {
+        if (size <= maximumSize) {
             return;
         }
 
         throw new SftpOperationError(
-            "REMOTE_FILE_TOO_LARGE",
-            "This remote file is too large to edit safely.",
+            errorCode,
+            errorMessage,
             {
                 remotePath,
                 size,
-                maximumSize:
-                    MAX_EDITABLE_FILE_BYTES,
+                maximumSize,
             },
+        );
+    }
+
+    private assertEditableFileSize(
+        sizeValue: number | undefined,
+        remotePath: string,
+    ): void {
+        this.assertFileSizeLimit(
+            sizeValue,
+            remotePath,
+            MAX_EDITABLE_FILE_BYTES,
+            "REMOTE_FILE_TOO_LARGE",
+            "This remote file is too large to edit safely.",
         );
     }
 
@@ -956,6 +1145,96 @@ export class SftpManager {
                 },
             );
         }
+    }
+
+    private detectImageMimeType(
+        content: Buffer,
+    ): RemoteImageMimeType | null {
+        if (
+            content.length >= 8 &&
+            content[0] === 0x89 &&
+            content[1] === 0x50 &&
+            content[2] === 0x4e &&
+            content[3] === 0x47 &&
+            content[4] === 0x0d &&
+            content[5] === 0x0a &&
+            content[6] === 0x1a &&
+            content[7] === 0x0a
+        ) {
+            return "image/png";
+        }
+
+        if (
+            content.length >= 3 &&
+            content[0] === 0xff &&
+            content[1] === 0xd8 &&
+            content[2] === 0xff
+        ) {
+            return "image/jpeg";
+        }
+
+        if (content.length >= 6) {
+            const gifSignature =
+                content
+                    .subarray(
+                        0,
+                        6,
+                    )
+                    .toString(
+                        "ascii",
+                    );
+
+            if (
+                gifSignature ===
+                "GIF87a" ||
+                gifSignature ===
+                "GIF89a"
+            ) {
+                return "image/gif";
+            }
+        }
+
+        if (
+            content.length >= 12 &&
+            content
+                .subarray(
+                    0,
+                    4,
+                )
+                .toString(
+                    "ascii",
+                ) === "RIFF" &&
+            content
+                .subarray(
+                    8,
+                    12,
+                )
+                .toString(
+                    "ascii",
+                ) === "WEBP"
+        ) {
+            return "image/webp";
+        }
+
+        if (
+            content.length >= 2 &&
+            content[0] === 0x42 &&
+            content[1] === 0x4d
+        ) {
+            return "image/bmp";
+        }
+
+        if (
+            content.length >= 4 &&
+            content[0] === 0x00 &&
+            content[1] === 0x00 &&
+            content[2] === 0x01 &&
+            content[3] === 0x00
+        ) {
+            return "image/x-icon";
+        }
+
+        return null;
     }
 
     private decodeBase64Content(
@@ -1049,6 +1328,9 @@ export class SftpManager {
     private async readFileBuffer(
         sftp: SFTPWrapper,
         remotePath: string,
+        maximumSize: number,
+        sizeErrorCode: string,
+        sizeErrorMessage: string,
     ): Promise<Buffer> {
         const handle =
             await this.openFile(
@@ -1064,9 +1346,12 @@ export class SftpManager {
                     handle,
                 );
 
-            this.assertEditableFileSize(
+            this.assertFileSizeLimit(
                 attributes.size,
                 remotePath,
+                maximumSize,
+                sizeErrorCode,
+                sizeErrorMessage,
             );
 
             const size =

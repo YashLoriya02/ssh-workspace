@@ -35,6 +35,7 @@ import {
     Trash2,
     Upload,
     X,
+    ImageIcon
 } from "lucide-react";
 
 import {
@@ -49,11 +50,15 @@ import type {
     TransferEventPayload,
 } from "../../backend/backend-client";
 
+import {
+    isSupportedImageFileName,
+} from "../editor/editor-utils";
+
 interface RemoteFileExplorerProps {
     connectionId: string;
     isActive: boolean;
 
-    onEditFile: (
+    onOpenFile: (
         entry: RemoteFileEntry,
     ) => void;
 
@@ -345,7 +350,7 @@ function buildBreadcrumbs(
 export function RemoteFileExplorer({
     connectionId,
     isActive,
-    onEditFile,
+    onOpenFile,
     externalFileChange,
 }: RemoteFileExplorerProps) {
     const [listing, setListing] =
@@ -1277,7 +1282,7 @@ export function RemoteFileExplorer({
         if (
             entry.type === "file"
         ) {
-            onEditFile(entry);
+            onOpenFile(entry);
         }
     }
 
@@ -2141,11 +2146,22 @@ export function RemoteFileExplorer({
 
                                                 setContextMenu(null);
 
-                                                onEditFile(entry!);
+                                                onOpenFile(entry!);
                                             }}
                                         >
-                                            <FileText size={15} />
-                                            Edit
+                                            {isSupportedImageFileName(
+                                                contextMenu.entry.name,
+                                            ) ? (
+                                                <ImageIcon size={15} />
+                                            ) : (
+                                                <FileText size={15} />
+                                            )}
+
+                                            {isSupportedImageFileName(
+                                                contextMenu.entry.name,
+                                            )
+                                                ? "Open Image"
+                                                : "Edit"}
                                         </button>
 
                                         <button

@@ -5,6 +5,7 @@ import {
 
 import {
     FileCode2,
+    ImageIcon,
     Loader,
     SquareTerminal,
     X,
@@ -37,6 +38,10 @@ import {
 import {
     TransferQueue,
 } from "./TransferQueue";
+
+import {
+    RemoteImageViewer,
+} from "../editor/RemoteImageViewer";
 
 interface WorkspacePageProps {
     connectionId: string;
@@ -150,7 +155,7 @@ export function WorkspacePage({
                 <button
                     type="button"
                     style={{
-                        marginRight: "10px"
+                        marginRight: "5px"
                     }}
                     className={
                         isWorkspaceView
@@ -187,6 +192,9 @@ export function WorkspacePage({
                             <button
                                 key={tab.path}
                                 type="button"
+                                style={{
+                                    marginRight: "5px"
+                                }}
                                 className={
                                     active
                                         ? "workspace-view-tab workspace-view-tab--editor workspace-view-tab--active"
@@ -204,6 +212,11 @@ export function WorkspacePage({
                                     <Loader
                                         size={13}
                                         className="loader"
+                                    />
+                                ) : tab.kind ===
+                                    "image" ? (
+                                    <ImageIcon
+                                        size={13}
                                     />
                                 ) : (
                                     <FileCode2
@@ -291,7 +304,7 @@ export function WorkspacePage({
                             isActive &&
                             isWorkspaceView
                         }
-                        onEditFile={
+                        onOpenFile={
                             editor.openFile
                         }
                         externalFileChange={
@@ -309,13 +322,18 @@ export function WorkspacePage({
 
             <RemoteEditorWorkspace
                 tab={
-                    editor.activeTab
+                    editor.activeTab?.kind ===
+                        "text"
+                        ? editor.activeTab
+                        : null
                 }
                 conflict={
                     editor.conflict
                 }
                 isVisible={
-                    !isWorkspaceView
+                    !isWorkspaceView &&
+                    editor.activeTab?.kind ===
+                    "text"
                 }
                 isSessionActive={
                     isActive
@@ -367,6 +385,46 @@ export function WorkspacePage({
                 onCancelConflict={
                     editor.cancelConflict
                 }
+            />
+
+            <RemoteImageViewer
+                connectionId={
+                    connectionId
+                }
+                tab={
+                    editor.activeTab?.kind ===
+                        "image"
+                        ? editor.activeTab
+                        : null
+                }
+                isVisible={
+                    !isWorkspaceView &&
+                    editor.activeTab?.kind ===
+                    "image"
+                }
+                isSessionActive={
+                    isActive
+                }
+                onReload={async () => {
+                    if (
+                        editor.activePath
+                    ) {
+                        await editor.reloadTab(
+                            editor.activePath,
+                            false,
+                        );
+                    }
+                }}
+                onRetry={async () => {
+                    if (
+                        editor.activePath
+                    ) {
+                        await editor.reloadTab(
+                            editor.activePath,
+                            false,
+                        );
+                    }
+                }}
             />
         </main>
     );

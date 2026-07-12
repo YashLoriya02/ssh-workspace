@@ -1,10 +1,50 @@
 import type {
+    RemoteImageSnapshot,
     RemoteTextFileSnapshot,
 } from "../../backend/backend-client";
 
 import type {
-    RemoteEditorTab,
+    RemoteImageViewerTab,
+    RemoteTextEditorTab,
 } from "./editor-types";
+
+const SUPPORTED_IMAGE_EXTENSIONS =
+    new Set([
+        "png",
+        "jpg",
+        "jpeg",
+        "jfif",
+        "gif",
+        "webp",
+        "bmp",
+        "ico",
+    ]);
+
+export function isSupportedImageFileName(
+    filename: string,
+): boolean {
+    const normalizedName =
+        filename
+            .trim()
+            .toLowerCase();
+
+    const finalSegment =
+        normalizedName
+            .split("/")
+            .pop() ??
+        normalizedName;
+
+    const extension =
+        finalSegment.includes(".")
+            ? finalSegment
+                .split(".")
+                .pop() ?? ""
+            : "";
+
+    return SUPPORTED_IMAGE_EXTENSIONS.has(
+        extension,
+    );
+}
 
 export function decodeBase64Utf8(
     base64: string,
@@ -211,7 +251,7 @@ export function createEditorTabFromSnapshot(
     connectionId: string,
     snapshot:
         RemoteTextFileSnapshot,
-): RemoteEditorTab {
+): RemoteTextEditorTab {
     const content =
         decodeBase64Utf8(
             snapshot.contentBase64,
@@ -220,6 +260,7 @@ export function createEditorTabFromSnapshot(
     return {
         path: snapshot.path,
         name: snapshot.name,
+        kind: "text",
 
         modelPath:
             getRemoteEditorModelPath(
@@ -256,6 +297,41 @@ export function createEditorTabFromSnapshot(
         status: "ready",
 
         isSaving: false,
+        isReloading: false,
+
+        error: "",
+    };
+}
+
+export function createImageTabFromSnapshot(
+    snapshot:
+        RemoteImageSnapshot,
+): RemoteImageViewerTab {
+    return {
+        kind: "image",
+
+        path: snapshot.path,
+        name: snapshot.name,
+
+        contentBase64:
+            snapshot.contentBase64,
+
+        mimeType:
+            snapshot.mimeType,
+
+        revision:
+            snapshot.revision,
+
+        size:
+            snapshot.size,
+
+        modifiedAt:
+            snapshot.modifiedAt,
+
+        permissions:
+            snapshot.permissions,
+
+        status: "ready",
         isReloading: false,
 
         error: "",

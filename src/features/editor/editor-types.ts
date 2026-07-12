@@ -1,11 +1,33 @@
-export type RemoteEditorTabStatus =
+import type {
+    RemoteImageMimeType,
+} from "../../backend/backend-client";
+
+export type RemoteWorkspaceTabStatus =
     | "loading"
     | "ready"
     | "error";
 
-export interface RemoteEditorTab {
+interface RemoteWorkspaceTabBase {
+    kind:
+        | "text"
+        | "image";
+
     path: string;
     name: string;
+
+    size: number;
+    modifiedAt: number | null;
+    permissions: string | null;
+
+    status: RemoteWorkspaceTabStatus;
+    isReloading: boolean;
+
+    error: string;
+}
+
+export interface RemoteTextEditorTab
+    extends RemoteWorkspaceTabBase {
+    kind: "text";
 
     modelPath: string;
     language: string;
@@ -14,22 +36,28 @@ export interface RemoteEditorTab {
     savedContent: string;
 
     revision: string;
-
     encoding: "utf-8";
 
-    size: number;
-    modifiedAt: number | null;
-    permissions: string | null;
-
     readOnly: boolean;
-
-    status: RemoteEditorTabStatus;
-
     isSaving: boolean;
-    isReloading: boolean;
-
-    error: string;
 }
+
+export interface RemoteImageViewerTab
+    extends RemoteWorkspaceTabBase {
+    kind: "image";
+
+    contentBase64: string;
+
+    mimeType:
+        | RemoteImageMimeType
+        | null;
+
+    revision: string;
+}
+
+export type RemoteWorkspaceTab =
+    | RemoteTextEditorTab
+    | RemoteImageViewerTab;
 
 export interface RemoteEditorConflict {
     path: string;
@@ -42,10 +70,12 @@ export interface RemoteFileChange {
 }
 
 export function isRemoteEditorTabDirty(
-    tab: RemoteEditorTab,
+    tab: RemoteWorkspaceTab,
 ): boolean {
     return (
+        tab.kind === "text" &&
         tab.status === "ready" &&
-        tab.content !== tab.savedContent
+        tab.content !==
+            tab.savedContent
     );
 }
