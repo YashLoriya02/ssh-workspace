@@ -52,6 +52,15 @@ import type {
 interface RemoteFileExplorerProps {
     connectionId: string;
     isActive: boolean;
+
+    onEditFile: (
+        entry: RemoteFileEntry,
+    ) => void;
+
+    externalFileChange?: {
+        path: string;
+        version: number;
+    } | null;
 }
 
 interface Breadcrumb {
@@ -336,6 +345,8 @@ function buildBreadcrumbs(
 export function RemoteFileExplorer({
     connectionId,
     isActive,
+    onEditFile,
+    externalFileChange,
 }: RemoteFileExplorerProps) {
     const [listing, setListing] =
         useState<RemoteDirectoryListing | null>(
@@ -1119,6 +1130,38 @@ export function RemoteFileExplorer({
         );
 
     useEffect(() => {
+        if (!externalFileChange) {
+            return;
+        }
+
+        const parentPath =
+            getRemoteParentDirectory(
+                externalFileChange.path,
+            );
+
+        invalidateCachedDirectory(
+            parentPath,
+        );
+
+        if (
+            listing?.path ===
+            parentPath
+        ) {
+            void loadDirectory(
+                parentPath,
+                {
+                    forceRefresh: true,
+                },
+            );
+        }
+    }, [
+        externalFileChange,
+        invalidateCachedDirectory,
+        listing?.path,
+        loadDirectory,
+    ]);
+
+    useEffect(() => {
         return backendClient.subscribeToEvents(
             (event) => {
                 if (
@@ -1220,11 +1263,22 @@ export function RemoteFileExplorer({
     function handleEntryOpen(
         entry: RemoteFileEntry,
     ): void {
-        if (entry.type !== "directory") {
+        if (
+            entry.type ===
+            "directory"
+        ) {
+            void loadDirectory(
+                entry.path,
+            );
+
             return;
         }
 
-        void loadDirectory(entry.path);
+        if (
+            entry.type === "file"
+        ) {
+            onEditFile(entry);
+        }
     }
 
     function handleContextMenuOpen(
@@ -1723,7 +1777,7 @@ export function RemoteFileExplorer({
                     {toastMessage}
                 </div>
             )}
-            
+
             {isDraggingFiles && (
                 <div className="file-drop-overlay">
                     <div className="file-drop-overlay__icon">
@@ -2081,14 +2135,17 @@ export function RemoteFileExplorer({
                                         <button
                                             type="button"
                                             className="remote-context-menu__item"
-                                            disabled
-                                            title="Remote editor is coming soon"
+                                            onClick={() => {
+                                                const entry =
+                                                    contextMenu.entry;
+
+                                                setContextMenu(null);
+
+                                                onEditFile(entry!);
+                                            }}
                                         >
                                             <FileText size={15} />
                                             Edit
-                                            <span className="remote-context-menu__hint">
-                                                Soon
-                                            </span>
                                         </button>
 
                                         <button

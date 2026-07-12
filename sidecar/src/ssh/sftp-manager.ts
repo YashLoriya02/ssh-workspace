@@ -1,7 +1,12 @@
 import path from "node:path";
 
-import type { SFTPWrapper } from "ssh2";
+import {
+    createHash,
+    randomUUID,
+} from "node:crypto";
 
+import { TextDecoder } from "node:util";
+import type { OpenMode, SFTPWrapper } from "ssh2";
 import type { ConnectionManager } from "./connection-manager";
 
 export type RemoteFileType =
@@ -26,6 +31,37 @@ export interface RemoteDirectoryListing {
     parentPath: string | null;
     entries: RemoteFileEntry[];
 }
+
+export interface RemoteTextFileSnapshot {
+    path: string;
+    name: string;
+
+    contentBase64: string;
+    encoding: "utf-8";
+
+    size: number;
+    modifiedAt: number | null;
+    permissions: string | null;
+
+    revision: string;
+    readOnly: boolean;
+}
+
+export class SftpOperationError extends Error {
+    constructor(
+        public readonly code: string,
+        message: string,
+        public readonly details?:
+            Record<string, unknown>,
+    ) {
+        super(message);
+
+        this.name =
+            "SftpOperationError";
+    }
+}
+
+const MAX_EDITABLE_FILE_BYTES = 2 * 1024 * 1024;
 
 interface RemoteAttributes {
     mode?: number;
@@ -356,6 +392,274 @@ export class SftpManager {
         );
     }
 
+    async saveTextFile(
+        connectionId: string,
+        requestedPath: string,
+        contentBase64: string,
+        expectedRevision: string,
+        force: boolean,
+    ): Promise<RemoteTextFileSnapshot> {
+        const sftp =
+            await this.getSession(
+                connectionId,
+            );
+
+        const remotePath =
+            this.requireMutableRemotePath(
+                requestedPath,
+                "remotePath",
+            );
+
+        if (
+            !force &&
+            expectedRevision.trim().length ===
+            0
+        ) {
+            throw new SftpOperationError(
+                "REMOTE_REVISION_REQUIRED",
+                "A remote file revision is required before saving.",
+                {
+                    remotePath,
+                },
+            );
+        }
+
+        const content =
+            this.decodeBase64Content(
+                contentBase64,
+            );
+
+        this.assertEditableFileSize(
+            content.length,
+            remotePath,
+        );
+
+        this.assertEditableText(
+            content,
+            remotePath,
+        );
+
+        const currentSnapshot =
+            await this.readTextFile(
+                connectionId,
+                remotePath,
+            );
+
+        this.assertExpectedRevision(
+            currentSnapshot,
+            expectedRevision,
+            force,
+        );
+
+        const currentAttributes =
+            await this.lstat(
+                sftp,
+                remotePath,
+            );
+
+        const originalMode =
+            typeof currentAttributes.mode ===
+                "number"
+                ? currentAttributes.mode &
+                0o7777
+                : 0o600;
+
+        const parentPath =
+            path.posix.dirname(
+                remotePath,
+            );
+
+        const fileName =
+            path.posix.basename(
+                remotePath,
+            );
+
+        const operationId =
+            randomUUID();
+
+        const temporaryPath =
+            path.posix.join(
+                parentPath,
+                `.${fileName}.ssh-workspace-${operationId}.tmp`,
+            );
+
+        let temporaryFileExists =
+            false;
+
+        try {
+            await this.writeFileBuffer(
+                sftp,
+                temporaryPath,
+                content,
+                originalMode,
+            );
+
+            temporaryFileExists =
+                true;
+
+            await this.chmod(
+                sftp,
+                temporaryPath,
+                originalMode,
+            );
+
+            const temporaryAttributes =
+                await this.lstat(
+                    sftp,
+                    temporaryPath,
+                );
+
+            if (
+                temporaryAttributes.size !==
+                content.length
+            ) {
+                throw new SftpOperationError(
+                    "REMOTE_TEMP_FILE_INCOMPLETE",
+                    "The temporary remote file was not written completely.",
+                    {
+                        remotePath,
+                        temporaryPath,
+
+                        expectedSize:
+                            content.length,
+
+                        actualSize:
+                            temporaryAttributes.size ??
+                            null,
+                    },
+                );
+            }
+
+            if (!force) {
+                const latestSnapshot =
+                    await this.readTextFile(
+                        connectionId,
+                        remotePath,
+                    );
+
+                this.assertExpectedRevision(
+                    latestSnapshot,
+                    expectedRevision,
+                    false,
+                );
+            }
+
+            await this.replaceRemoteFile(
+                sftp,
+                temporaryPath,
+                remotePath,
+            );
+
+            temporaryFileExists =
+                false;
+        } catch (error) {
+            if (temporaryFileExists) {
+                await this.safeUnlink(
+                    sftp,
+                    temporaryPath,
+                );
+            }
+
+            throw error;
+        }
+
+        return this.readTextFile(
+            connectionId,
+            remotePath,
+        );
+    }
+
+    async readTextFile(
+        connectionId: string,
+        requestedPath: string,
+    ): Promise<RemoteTextFileSnapshot> {
+        const sftp =
+            await this.getSession(
+                connectionId,
+            );
+
+        const remotePath =
+            this.requireRemotePath(
+                requestedPath,
+                "remotePath",
+            );
+
+        const initialAttributes =
+            await this.lstat(
+                sftp,
+                remotePath,
+            );
+
+        const initialMode =
+            typeof initialAttributes.mode ===
+                "number"
+                ? initialAttributes.mode
+                : undefined;
+
+        const type =
+            this.getFileType(
+                initialMode,
+            );
+
+        if (type !== "file") {
+            throw new SftpOperationError(
+                "REMOTE_FILE_NOT_EDITABLE",
+                "Only regular remote files can be opened in the editor.",
+                {
+                    remotePath,
+                    type,
+                },
+            );
+        }
+
+        this.assertEditableFileSize(
+            initialAttributes.size,
+            remotePath,
+        );
+
+        const content =
+            await this.readFileBuffer(
+                sftp,
+                remotePath,
+            );
+
+        this.assertEditableText(
+            content,
+            remotePath,
+        );
+
+        const latestAttributes =
+            await this.lstat(
+                sftp,
+                remotePath,
+            );
+
+        const latestSize =
+            typeof latestAttributes.size ===
+                "number"
+                ? latestAttributes.size
+                : content.length;
+
+        if (
+            latestSize !==
+            content.length
+        ) {
+            throw new SftpOperationError(
+                "REMOTE_FILE_CHANGED_DURING_READ",
+                "The remote file changed while it was being opened. Please try again.",
+                {
+                    remotePath,
+                },
+            );
+        }
+
+        return this.createTextSnapshot(
+            remotePath,
+            content,
+            latestAttributes,
+        );
+    }
+
     closeForConnection(connectionId: string): void {
         const sessionPromise =
             this.sessions.get(connectionId);
@@ -483,6 +787,239 @@ export class SftpManager {
         return remotePath;
     }
 
+    private createTextSnapshot(
+        remotePath: string,
+        content: Buffer,
+        attributes: RemoteAttributes,
+    ): RemoteTextFileSnapshot {
+        const mode =
+            typeof attributes.mode ===
+                "number"
+                ? attributes.mode
+                : undefined;
+
+        return {
+            path: remotePath,
+
+            name:
+                path.posix.basename(
+                    remotePath,
+                ),
+
+            contentBase64:
+                content.toString(
+                    "base64",
+                ),
+
+            encoding: "utf-8",
+
+            size: content.length,
+
+            modifiedAt:
+                typeof attributes.mtime ===
+                    "number"
+                    ? attributes.mtime
+                    : null,
+
+            permissions:
+                this.formatPermissions(
+                    mode,
+                ),
+
+            revision:
+                this.createRevision(
+                    content,
+                ),
+
+            /*
+             * This is an advisory UI value. The server still
+             * makes the final permission decision during save.
+             */
+            readOnly:
+                mode !== undefined
+                    ? (
+                        mode &
+                        0o222
+                    ) === 0
+                    : false,
+        };
+    }
+
+    private createRevision(
+        content: Buffer,
+    ): string {
+        return createHash(
+            "sha256",
+        )
+            .update(content)
+            .digest("hex");
+    }
+
+    private assertExpectedRevision(
+        currentSnapshot:
+            RemoteTextFileSnapshot,
+        expectedRevision: string,
+        force: boolean,
+    ): void {
+        if (
+            force ||
+            currentSnapshot.revision ===
+            expectedRevision
+        ) {
+            return;
+        }
+
+        throw new SftpOperationError(
+            "REMOTE_FILE_CHANGED",
+            "The remote file changed after it was opened.",
+            {
+                remotePath:
+                    currentSnapshot.path,
+
+                expectedRevision,
+
+                currentRevision:
+                    currentSnapshot.revision,
+
+                currentModifiedAt:
+                    currentSnapshot.modifiedAt,
+
+                currentSize:
+                    currentSnapshot.size,
+            },
+        );
+    }
+
+    private assertEditableFileSize(
+        sizeValue: number | undefined,
+        remotePath: string,
+    ): void {
+        const size =
+            typeof sizeValue === "number"
+                ? sizeValue
+                : 0;
+
+        if (
+            size <=
+            MAX_EDITABLE_FILE_BYTES
+        ) {
+            return;
+        }
+
+        throw new SftpOperationError(
+            "REMOTE_FILE_TOO_LARGE",
+            "This remote file is too large to edit safely.",
+            {
+                remotePath,
+                size,
+                maximumSize:
+                    MAX_EDITABLE_FILE_BYTES,
+            },
+        );
+    }
+
+    private assertEditableText(
+        content: Buffer,
+        remotePath: string,
+    ): void {
+        if (
+            content.includes(0)
+        ) {
+            throw new SftpOperationError(
+                "REMOTE_FILE_BINARY",
+                "This appears to be a binary file and cannot be opened in the text editor.",
+                {
+                    remotePath,
+                },
+            );
+        }
+
+        try {
+            const decoder =
+                new TextDecoder(
+                    "utf-8",
+                    {
+                        fatal: true,
+                    },
+                );
+
+            decoder.decode(
+                content,
+            );
+        } catch {
+            throw new SftpOperationError(
+                "REMOTE_FILE_ENCODING_UNSUPPORTED",
+                "This file is not valid UTF-8 text.",
+                {
+                    remotePath,
+                    encoding: "unknown",
+                },
+            );
+        }
+    }
+
+    private decodeBase64Content(
+        contentBase64: string,
+    ): Buffer {
+        const normalized =
+            contentBase64.replace(
+                /\s+/gu,
+                "",
+            );
+
+        if (normalized.length === 0) {
+            return Buffer.alloc(0);
+        }
+
+        const validBase64Pattern =
+            /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
+
+        if (
+            !validBase64Pattern.test(
+                normalized,
+            )
+        ) {
+            throw new SftpOperationError(
+                "INVALID_BASE64_CONTENT",
+                "The editor content is not valid base64 data.",
+            );
+        }
+
+        const content =
+            Buffer.from(
+                normalized,
+                "base64",
+            );
+
+        const inputWithoutPadding =
+            normalized.replace(
+                /=+$/u,
+                "",
+            );
+
+        const outputWithoutPadding =
+            content
+                .toString(
+                    "base64",
+                )
+                .replace(
+                    /=+$/u,
+                    "",
+                );
+
+        if (
+            inputWithoutPadding !==
+            outputWithoutPadding
+        ) {
+            throw new SftpOperationError(
+                "INVALID_BASE64_CONTENT",
+                "The editor content could not be decoded safely.",
+            );
+        }
+
+        return content;
+    }
+
     private lstat(
         sftp: SFTPWrapper,
         remotePath: string,
@@ -507,6 +1044,376 @@ export class SftpManager {
                 );
             },
         );
+    }
+
+    private async readFileBuffer(
+        sftp: SFTPWrapper,
+        remotePath: string,
+    ): Promise<Buffer> {
+        const handle =
+            await this.openFile(
+                sftp,
+                remotePath,
+                "r",
+            );
+
+        try {
+            const attributes =
+                await this.fstat(
+                    sftp,
+                    handle,
+                );
+
+            this.assertEditableFileSize(
+                attributes.size,
+                remotePath,
+            );
+
+            const size =
+                typeof attributes.size ===
+                    "number"
+                    ? attributes.size
+                    : 0;
+
+            if (size === 0) {
+                return Buffer.alloc(0);
+            }
+
+            const buffer =
+                Buffer.alloc(size);
+
+            let offset = 0;
+
+            while (offset < size) {
+                const bytesRead =
+                    await this.readChunk(
+                        sftp,
+                        handle,
+                        buffer,
+                        offset,
+                        size - offset,
+                        offset,
+                    );
+
+                if (bytesRead === 0) {
+                    break;
+                }
+
+                offset += bytesRead;
+            }
+
+            return buffer.subarray(
+                0,
+                offset,
+            );
+        } finally {
+            await this.closeHandle(
+                sftp,
+                handle,
+            );
+        }
+    }
+
+    private openFile(
+        sftp: SFTPWrapper,
+        remotePath: string,
+        flags: OpenMode,
+    ): Promise<Buffer> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.open(
+                    remotePath,
+                    flags,
+                    (
+                        error,
+                        handle,
+                    ) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve(handle);
+                    },
+                );
+            },
+        );
+    }
+
+    private fstat(
+        sftp: SFTPWrapper,
+        handle: Buffer,
+    ): Promise<RemoteAttributes> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.fstat(
+                    handle,
+                    (
+                        error,
+                        attributes,
+                    ) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve(
+                            attributes,
+                        );
+                    },
+                );
+            },
+        );
+    }
+
+    private readChunk(
+        sftp: SFTPWrapper,
+        handle: Buffer,
+        buffer: Buffer,
+        offset: number,
+        length: number,
+        position: number,
+    ): Promise<number> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.read(
+                    handle,
+                    buffer,
+                    offset,
+                    length,
+                    position,
+                    (
+                        error,
+                        bytesRead,
+                    ) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve(
+                            bytesRead,
+                        );
+                    },
+                );
+            },
+        );
+    }
+
+    private closeHandle(
+        sftp: SFTPWrapper,
+        handle: Buffer,
+    ): Promise<void> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.close(
+                    handle,
+                    (error) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve();
+                    },
+                );
+            },
+        );
+    }
+
+    private writeFileBuffer(
+        sftp: SFTPWrapper,
+        remotePath: string,
+        content: Buffer,
+        mode: number,
+    ): Promise<void> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.writeFile(
+                    remotePath,
+                    content,
+                    {
+                        flag: "w",
+                        mode,
+                    },
+                    (error) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve();
+                    },
+                );
+            },
+        );
+    }
+
+    private chmod(
+        sftp: SFTPWrapper,
+        remotePath: string,
+        mode: number,
+    ): Promise<void> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.chmod(
+                    remotePath,
+                    mode,
+                    (error) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve();
+                    },
+                );
+            },
+        );
+    }
+
+    private async replaceRemoteFile(
+        sftp: SFTPWrapper,
+        temporaryPath: string,
+        destinationPath: string,
+    ): Promise<void> {
+        /*
+         * OpenSSH's POSIX rename extension replaces the
+         * destination atomically when the server supports it.
+         */
+        try {
+            const replaced =
+                await this.tryOpenSshRename(
+                    sftp,
+                    temporaryPath,
+                    destinationPath,
+                );
+
+            if (replaced) {
+                return;
+            }
+        } catch {
+            /*
+             * Fall through to the portable backup strategy.
+             */
+        }
+
+        const backupPath =
+            `${destinationPath}.ssh-workspace-${randomUUID()}.bak`;
+
+        await this.rename(
+            sftp,
+            destinationPath,
+            backupPath,
+        );
+
+        try {
+            await this.rename(
+                sftp,
+                temporaryPath,
+                destinationPath,
+            );
+        } catch (replacementError) {
+            try {
+                await this.rename(
+                    sftp,
+                    backupPath,
+                    destinationPath,
+                );
+            } catch (rollbackError) {
+                throw new SftpOperationError(
+                    "REMOTE_SAVE_ROLLBACK_FAILED",
+                    "The remote save failed and the original file could not be restored automatically.",
+                    {
+                        destinationPath,
+                        backupPath,
+
+                        replacementError:
+                            replacementError instanceof
+                                Error
+                                ? replacementError.message
+                                : String(
+                                    replacementError,
+                                ),
+
+                        rollbackError:
+                            rollbackError instanceof
+                                Error
+                                ? rollbackError.message
+                                : String(
+                                    rollbackError,
+                                ),
+                    },
+                );
+            }
+
+            throw replacementError;
+        }
+
+        /*
+         * The new file is already in place. Failure to remove
+         * a backup should not mark the save itself as failed.
+         */
+        await this.safeUnlink(
+            sftp,
+            backupPath,
+        );
+    }
+
+    private tryOpenSshRename(
+        sftp: SFTPWrapper,
+        sourcePath: string,
+        destinationPath: string,
+    ): Promise<boolean> {
+        const extendedSftp =
+            sftp as SFTPWrapper & {
+                ext_openssh_rename?: (
+                    sourcePath: string,
+                    destinationPath: string,
+                    callback: (
+                        error?: Error | null,
+                    ) => void,
+                ) => void;
+            };
+
+        if (
+            typeof extendedSftp
+                .ext_openssh_rename !==
+            "function"
+        ) {
+            return Promise.resolve(
+                false,
+            );
+        }
+
+        return new Promise(
+            (resolve, reject) => {
+                extendedSftp.ext_openssh_rename?.(
+                    sourcePath,
+                    destinationPath,
+                    (error) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve(true);
+                    },
+                );
+            },
+        );
+    }
+
+    private async safeUnlink(
+        sftp: SFTPWrapper,
+        remotePath: string,
+    ): Promise<void> {
+        try {
+            await this.unlink(
+                sftp,
+                remotePath,
+            );
+        } catch { }
     }
 
     private rename(

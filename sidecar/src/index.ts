@@ -6,7 +6,10 @@ import {
   type SshAuthentication,
 } from "./ssh/connection-manager.js";
 import { TerminalManager } from "./ssh/terminal-manager";
-import { SftpManager } from "./ssh/sftp-manager";
+import {
+  SftpManager,
+  SftpOperationError,
+} from "./ssh/sftp-manager";
 import { TransferManager } from "./ssh/transfer-manager";
 
 interface BackendRequest {
@@ -90,6 +93,21 @@ function requireRecord(
 ): Record<string, unknown> {
   if (!isRecord(value)) {
     throw new Error(`${fieldName} must be an object.`);
+  }
+
+  return value;
+}
+
+function requireStringIncludingEmpty(
+  object: Record<string, unknown>,
+  fieldName: string,
+): string {
+  const value = object[fieldName];
+
+  if (typeof value !== "string") {
+    throw new Error(
+      `${fieldName} must be a string.`,
+    );
   }
 
   return value;
@@ -678,6 +696,95 @@ async function handleRequest(
       return;
     }
 
+    case "sftp.readTextFile": {
+      const payload = requireRecord(
+        request.payload,
+        "sftp.readTextFile payload",
+      );
+
+      const connectionId =
+        requireString(
+          payload,
+          "connectionId",
+        );
+
+      const remotePath =
+        requireString(
+          payload,
+          "remotePath",
+        );
+
+      const snapshot =
+        await sftpManager.readTextFile(
+          connectionId,
+          remotePath,
+        );
+
+      sendMessage({
+        id: request.id,
+        type: "sftp.textFile",
+        payload: snapshot,
+      });
+
+      return;
+    }
+
+    case "sftp.saveTextFile": {
+      const payload = requireRecord(
+        request.payload,
+        "sftp.saveTextFile payload",
+      );
+
+      const connectionId =
+        requireString(
+          payload,
+          "connectionId",
+        );
+
+      const remotePath =
+        requireString(
+          payload,
+          "remotePath",
+        );
+
+      const contentBase64 =
+        requireStringIncludingEmpty(
+          payload,
+          "contentBase64",
+        );
+
+      const expectedRevision =
+        requireString(
+          payload,
+          "expectedRevision",
+        );
+
+      const force =
+        payload.force === undefined
+          ? false
+          : requireBoolean(
+            payload,
+            "force",
+          );
+
+      const snapshot =
+        await sftpManager.saveTextFile(
+          connectionId,
+          remotePath,
+          contentBase64,
+          expectedRevision,
+          force,
+        );
+
+      sendMessage({
+        id: request.id,
+        type: "sftp.textFileSaved",
+        payload: snapshot,
+      });
+
+      return;
+    }
+
     case "transfer.download": {
       const payload = requireRecord(
         request.payload,
@@ -964,6 +1071,18 @@ async function handleInputLine(
         ? error.message
         : String(error);
 
+    const code =
+      error instanceof
+        SftpOperationError
+        ? error.code
+        : "MESSAGE_FAILED";
+
+    const details =
+      error instanceof
+        SftpOperationError
+        ? error.details
+        : undefined;
+
     writeLog(
       `Message ${parsedMessage.type} failed: ${message}`,
     );
@@ -972,10 +1091,18 @@ async function handleInputLine(
       ...(parsedMessage.id
         ? { id: parsedMessage.id }
         : {}),
+
       type: "system.error",
+
       payload: {
-        code: "MESSAGE_FAILED",
+        code,
         message,
+
+        ...(details
+          ? {
+            details,
+          }
+          : {}),
       },
     });
   }

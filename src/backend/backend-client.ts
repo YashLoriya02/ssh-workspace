@@ -67,6 +67,44 @@ export interface RemoteDirectoryListing {
     entries: RemoteFileEntry[];
 }
 
+export interface RemoteTextFileSnapshot {
+    path: string;
+    name: string;
+
+    contentBase64: string;
+    encoding: "utf-8";
+
+    size: number;
+    modifiedAt: number | null;
+    permissions: string | null;
+
+    revision: string;
+    readOnly: boolean;
+}
+
+export interface SaveRemoteTextFileOptions {
+    connectionId: string;
+    remotePath: string;
+
+    contentBase64: string;
+    expectedRevision: string;
+
+    force?: boolean;
+}
+
+export class BackendRequestError extends Error {
+    constructor(
+        public readonly code: string,
+        message: string,
+        public readonly details?: unknown,
+    ) {
+        super(message);
+
+        this.name =
+            "BackendRequestError";
+    }
+}
+
 export type TransferStatus =
     | "running"
     | "completed"
@@ -541,6 +579,73 @@ export class BackendClient {
         }
     }
 
+    async readRemoteTextFile(
+        connectionId: string,
+        remotePath: string,
+    ): Promise<RemoteTextFileSnapshot> {
+        const response =
+            await this.sendRequest(
+                "sftp.readTextFile",
+                {
+                    connectionId,
+                    remotePath,
+                },
+                30_000,
+            );
+
+        if (
+            response.type !==
+            "sftp.textFile"
+        ) {
+            throw new Error(
+                `Expected sftp.textFile but received ${response.type}.`,
+            );
+        }
+
+        return response.payload as
+            RemoteTextFileSnapshot;
+    }
+
+    async saveRemoteTextFile(
+        options:
+            SaveRemoteTextFileOptions,
+    ): Promise<RemoteTextFileSnapshot> {
+        const response =
+            await this.sendRequest(
+                "sftp.saveTextFile",
+                {
+                    connectionId:
+                        options.connectionId,
+
+                    remotePath:
+                        options.remotePath,
+
+                    contentBase64:
+                        options.contentBase64,
+
+                    expectedRevision:
+                        options.expectedRevision,
+
+                    force:
+                        options.force ??
+                        false,
+                },
+                45_000,
+            );
+
+        if (
+            response.type !==
+            "sftp.textFileSaved"
+        ) {
+            throw new Error(
+                `Expected sftp.textFileSaved but received ${response.type}.`,
+            );
+        }
+
+        return response.payload as
+            RemoteTextFileSnapshot;
+    }
+
     async connectSsh(
         config: SshConnectionConfig,
     ): Promise<string> {
@@ -703,6 +808,7 @@ export class BackendClient {
     private async sendRequest(
         type: string,
         payload?: unknown,
+        timeoutMs: number = 10_000,
     ): Promise<BackendMessage> {
         if (!this.child) {
             throw new Error("Backend is not running.");
@@ -720,7 +826,7 @@ export class BackendClient {
             const timeoutId = setTimeout(() => {
                 this.pendingRequests.delete(id);
                 reject(new Error(`Backend request timed out: ${type}`));
-            }, 10_000);
+            }, timeoutMs);
 
             this.pendingRequests.set(id, {
                 resolve,
@@ -776,12 +882,25 @@ export class BackendClient {
                 this.pendingRequests.delete(message.id);
 
                 if (message.type === "system.error") {
-                    const payload = message.payload as
-                        | { message?: string }
+                    const payload =
+                        message.payload as
+                        | {
+                            code?: string;
+                            message?: string;
+                            details?: unknown;
+                        }
                         | undefined;
 
                     pendingRequest.reject(
-                        new Error(payload?.message ?? "Backend request failed."),
+                        new BackendRequestError(
+                            payload?.code ??
+                            "BACKEND_REQUEST_FAILED",
+
+                            payload?.message ??
+                            "Backend request failed.",
+
+                            payload?.details,
+                        ),
                     );
                 } else {
                     pendingRequest.resolve(message);

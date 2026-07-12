@@ -815,9 +815,6 @@ function AppRoutes() {
                         connectionId={
                           session.connectionId
                         }
-                        title={
-                          session.title
-                        }
                         host={
                           session.host
                         }
