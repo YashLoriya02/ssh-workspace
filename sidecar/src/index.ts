@@ -497,6 +497,187 @@ async function handleRequest(
       return;
     }
 
+    case "sftp.stat": {
+      const payload = requireRecord(
+        request.payload,
+        "sftp.stat payload",
+      );
+
+      const connectionId =
+        requireString(
+          payload,
+          "connectionId",
+        );
+
+      const remotePath =
+        requireString(
+          payload,
+          "remotePath",
+        );
+
+      const entry =
+        await sftpManager.statPath(
+          connectionId,
+          remotePath,
+        );
+
+      sendMessage({
+        id: request.id,
+        type: "sftp.entry",
+        payload: entry,
+      });
+
+      return;
+    }
+
+    case "sftp.rename": {
+      const payload = requireRecord(
+        request.payload,
+        "sftp.rename payload",
+      );
+
+      const connectionId =
+        requireString(
+          payload,
+          "connectionId",
+        );
+
+      const sourcePath =
+        requireString(
+          payload,
+          "sourcePath",
+        );
+
+      const destinationPath =
+        requireString(
+          payload,
+          "destinationPath",
+        );
+
+      await sftpManager.renamePath(
+        connectionId,
+        sourcePath,
+        destinationPath,
+      );
+
+      sendMessage({
+        id: request.id,
+        type: "sftp.renameCompleted",
+        payload: {
+          connectionId,
+          sourcePath,
+          destinationPath,
+        },
+      });
+
+      return;
+    }
+
+    case "sftp.deleteFile": {
+      const payload = requireRecord(
+        request.payload,
+        "sftp.deleteFile payload",
+      );
+
+      const connectionId =
+        requireString(
+          payload,
+          "connectionId",
+        );
+
+      const remotePath =
+        requireString(
+          payload,
+          "remotePath",
+        );
+
+      await sftpManager.deleteFile(
+        connectionId,
+        remotePath,
+      );
+
+      sendMessage({
+        id: request.id,
+        type: "sftp.deleteFileCompleted",
+        payload: {
+          connectionId,
+          remotePath,
+        },
+      });
+
+      return;
+    }
+
+    case "sftp.createDirectory": {
+      const payload = requireRecord(
+        request.payload,
+        "sftp.createDirectory payload",
+      );
+
+      const connectionId =
+        requireString(
+          payload,
+          "connectionId",
+        );
+
+      const remotePath =
+        requireString(
+          payload,
+          "remotePath",
+        );
+
+      await sftpManager.createDirectory(
+        connectionId,
+        remotePath,
+      );
+
+      sendMessage({
+        id: request.id,
+        type: "sftp.createDirectoryCompleted",
+        payload: {
+          connectionId,
+          remotePath,
+        },
+      });
+
+      return;
+    }
+
+    case "sftp.deleteDirectory": {
+      const payload = requireRecord(
+        request.payload,
+        "sftp.deleteDirectory payload",
+      );
+
+      const connectionId =
+        requireString(
+          payload,
+          "connectionId",
+        );
+
+      const remotePath =
+        requireString(
+          payload,
+          "remotePath",
+        );
+
+      await sftpManager.deleteDirectory(
+        connectionId,
+        remotePath,
+      );
+
+      sendMessage({
+        id: request.id,
+        type: "sftp.deleteDirectoryCompleted",
+        payload: {
+          connectionId,
+          remotePath,
+        },
+      });
+
+      return;
+    }
+
     case "transfer.download": {
       const payload = requireRecord(
         request.payload,

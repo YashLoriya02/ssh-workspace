@@ -421,6 +421,126 @@ export class BackendClient {
         return response.payload as RemoteDirectoryListing;
     }
 
+    async statRemotePath(
+        connectionId: string,
+        remotePath: string,
+    ): Promise<RemoteFileEntry> {
+        const response =
+            await this.sendRequest(
+                "sftp.stat",
+                {
+                    connectionId,
+                    remotePath,
+                },
+            );
+
+        if (
+            response.type !==
+            "sftp.entry"
+        ) {
+            throw new Error(
+                `Expected sftp.entry but received ${response.type}.`,
+            );
+        }
+
+        return response.payload as
+            RemoteFileEntry;
+    }
+
+    async renameRemotePath(
+        connectionId: string,
+        sourcePath: string,
+        destinationPath: string,
+    ): Promise<void> {
+        const response =
+            await this.sendRequest(
+                "sftp.rename",
+                {
+                    connectionId,
+                    sourcePath,
+                    destinationPath,
+                },
+            );
+
+        if (
+            response.type !==
+            "sftp.renameCompleted"
+        ) {
+            throw new Error(
+                `Expected sftp.renameCompleted but received ${response.type}.`,
+            );
+        }
+    }
+
+    async deleteRemoteFile(
+        connectionId: string,
+        remotePath: string,
+    ): Promise<void> {
+        const response =
+            await this.sendRequest(
+                "sftp.deleteFile",
+                {
+                    connectionId,
+                    remotePath,
+                },
+            );
+
+        if (
+            response.type !==
+            "sftp.deleteFileCompleted"
+        ) {
+            throw new Error(
+                `Expected sftp.deleteFileCompleted but received ${response.type}.`,
+            );
+        }
+    }
+
+    async createRemoteDirectory(
+        connectionId: string,
+        remotePath: string,
+    ): Promise<void> {
+        const response =
+            await this.sendRequest(
+                "sftp.createDirectory",
+                {
+                    connectionId,
+                    remotePath,
+                },
+            );
+
+        if (
+            response.type !==
+            "sftp.createDirectoryCompleted"
+        ) {
+            throw new Error(
+                `Expected sftp.createDirectoryCompleted but received ${response.type}.`,
+            );
+        }
+    }
+
+    async deleteRemoteDirectory(
+        connectionId: string,
+        remotePath: string,
+    ): Promise<void> {
+        const response =
+            await this.sendRequest(
+                "sftp.deleteDirectory",
+                {
+                    connectionId,
+                    remotePath,
+                },
+            );
+
+        if (
+            response.type !==
+            "sftp.deleteDirectoryCompleted"
+        ) {
+            throw new Error(
+                `Expected sftp.deleteDirectoryCompleted but received ${response.type}.`,
+            );
+        }
+    }
+
     async connectSsh(
         config: SshConnectionConfig,
     ): Promise<string> {

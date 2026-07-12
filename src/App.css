@@ -2014,3 +2014,359 @@ h1 {
     display: none;
   }
 }
+
+
+/* =========================================================
+   Milestone 11A — Remote file context menu
+   ========================================================= */
+
+.remote-context-menu {
+  position: fixed;
+  z-index: 300;
+
+  display: grid;
+
+  width: 224px;
+  padding: 6px;
+
+  overflow: hidden;
+
+  border: 1px solid #394352;
+  border-radius: 10px;
+
+  color: #dce3ee;
+  background: rgba(24, 29, 37, 0.99);
+
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.48);
+
+  backdrop-filter: blur(12px);
+}
+
+.remote-context-menu__item {
+  display: grid;
+  grid-template-columns:
+    18px minmax(0, 1fr) auto;
+
+  align-items: center;
+
+  width: 100%;
+  min-height: 34px;
+  gap: 8px;
+  padding: 0 9px;
+
+  border: 0;
+  border-radius: 7px;
+
+  color: #cbd3df;
+  background: transparent;
+
+  text-align: left;
+  font-size: 11px;
+}
+
+.remote-context-menu__item:hover:not(:disabled) {
+  color: #ffffff;
+  background: #2a3341;
+}
+
+.remote-context-menu__item--danger {
+  color: #e6a0a0;
+}
+
+.remote-context-menu__item--danger:hover:not(:disabled) {
+  color: #ffc1c1;
+  background: #3a2226;
+}
+
+.remote-context-menu__item:disabled {
+  opacity: 0.42;
+}
+
+.remote-context-menu__hint {
+  color: #697588;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.remote-context-menu__separator {
+  height: 1px;
+  margin: 5px 4px;
+
+  background: #303744;
+}
+
+/* Feedback toast */
+
+.file-explorer-toast {
+  position: absolute;
+  z-index: 80;
+
+  bottom: 0;
+  right: 5px;
+
+  max-width: calc(100% - 24px);
+  padding: 12px 30px;
+
+  border: 1px solid #365943;
+  border-radius: 8px;
+
+  color: #a9e3bb;
+  background: rgba(22, 39, 29, 0.97);
+
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.3);
+
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  overflow: hidden;
+}
+
+.file-explorer-toast::after {
+  content: "";
+  position: absolute;
+
+  left: 0;
+  bottom: 0;
+
+  width: 100%;
+  height: 3px;
+
+  background: #6edc91;
+
+  transform-origin: left;
+  animation: toast-border-progress 2500ms linear forwards;
+}
+
+@keyframes toast-border-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.remote-dialog-backdrop {
+  position: fixed;
+  z-index: 350;
+  inset: 0;
+
+  display: grid;
+  place-items: center;
+
+  padding: 24px;
+
+  background: rgba(5, 8, 12, 0.72);
+
+  backdrop-filter: blur(4px);
+}
+
+.remote-dialog {
+  display: flex;
+  flex-direction: column;
+
+  width: min(560px, 100%);
+  max-height: min(700px, calc(100vh - 48px));
+
+  overflow: hidden;
+
+  border: 1px solid #3a4452;
+  border-radius: 14px;
+
+  color: #dce3ed;
+  background: #151a21;
+
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.55);
+}
+
+.remote-dialog--small {
+  width: min(460px, 100%);
+}
+
+.remote-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  min-width: 0;
+  gap: 16px;
+  padding: 17px 18px;
+
+  border-bottom: 1px solid #2c3440;
+
+  background: #191f27;
+}
+
+.remote-dialog__header>div {
+  min-width: 0;
+}
+
+.remote-dialog__header h2 {
+  margin: 0;
+
+  color: #eef2f8;
+
+  font-size: 15px;
+}
+
+.remote-dialog__header p {
+  overflow: hidden;
+
+  margin: 5px 0 0;
+
+  color: #798598;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-dialog__close {
+  display: grid;
+  flex: 0 0 auto;
+
+  width: 31px;
+  height: 31px;
+
+  place-items: center;
+  padding: 0;
+
+  color: #8995a6;
+  background: transparent;
+}
+
+.remote-dialog__close:hover:not(:disabled) {
+  color: #ffffff;
+  background: #2b333f;
+}
+
+.remote-dialog__body {
+  display: grid;
+
+  min-height: 0;
+  gap: 14px;
+  padding: 18px;
+
+  overflow-y: auto;
+}
+
+.remote-dialog__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 160px;
+  gap: 10px;
+
+  color: #8792a2;
+
+  font-size: 11px;
+}
+
+.remote-dialog__error {
+  padding: 10px 11px;
+
+  border: 1px solid #66383e;
+  border-radius: 8px;
+
+  color: #ffaaaa;
+  background: #2b191c;
+
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.remote-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 9px;
+  padding: 13px 18px;
+
+  border-top: 1px solid #2c3440;
+
+  background: #171c23;
+}
+
+.remote-details-grid {
+  display: grid;
+  grid-template-columns:
+    110px minmax(0, 1fr);
+
+  margin: 0;
+
+  border: 1px solid #2e3743;
+  border-radius: 9px;
+
+  overflow: hidden;
+
+  font-size: 11px;
+}
+
+.remote-details-grid dt,
+.remote-details-grid dd {
+  min-width: 0;
+  margin: 0;
+  padding: 10px 11px;
+
+  border-bottom: 1px solid #29313c;
+}
+
+.remote-details-grid dt {
+  color: #7f8a99;
+  background: #181e26;
+
+  font-weight: 600;
+}
+
+.remote-details-grid dd {
+  color: #c8d0dc;
+  background: #12171d;
+}
+
+.remote-details-grid dt:nth-last-of-type(1),
+.remote-details-grid dd:last-child {
+  border-bottom: 0;
+}
+
+.remote-details-path {
+  overflow-wrap: anywhere;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 10px;
+}
+
+@media (max-width: 520px) {
+  .remote-dialog-backdrop {
+    padding: 12px;
+  }
+
+  .remote-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .remote-details-grid dt {
+    padding-bottom: 4px;
+    border-bottom: 0;
+  }
+
+  .remote-details-grid dd {
+    padding-top: 4px;
+  }
+}

@@ -27,6 +27,14 @@ export interface RemoteDirectoryListing {
     entries: RemoteFileEntry[];
 }
 
+interface RemoteAttributes {
+    mode?: number;
+    size?: number;
+    mtime?: number;
+    uid?: number;
+    gid?: number;
+}
+
 export class SftpManager {
     private readonly sessions = new Map<
         string,
@@ -149,6 +157,205 @@ export class SftpManager {
         }
     }
 
+    async statPath(
+        connectionId: string,
+        requestedPath: string,
+    ): Promise<RemoteFileEntry> {
+        const sftp =
+            await this.getSession(
+                connectionId,
+            );
+
+        const remotePath =
+            this.requireRemotePath(
+                requestedPath,
+                "remotePath",
+            );
+
+        const attributes =
+            await this.lstat(
+                sftp,
+                remotePath,
+            );
+
+        const name =
+            path.posix.basename(
+                remotePath,
+            ) || "/";
+
+        const mode =
+            typeof attributes.mode === "number"
+                ? attributes.mode
+                : undefined;
+
+        return {
+            name,
+            path: remotePath,
+
+            type:
+                this.getFileType(
+                    mode,
+                ),
+
+            size:
+                typeof attributes.size === "number"
+                    ? attributes.size
+                    : 0,
+
+            modifiedAt:
+                typeof attributes.mtime === "number"
+                    ? attributes.mtime
+                    : null,
+
+            permissions:
+                this.formatPermissions(
+                    mode,
+                ),
+
+            uid:
+                typeof attributes.uid === "number"
+                    ? attributes.uid
+                    : null,
+
+            gid:
+                typeof attributes.gid === "number"
+                    ? attributes.gid
+                    : null,
+        };
+    }
+
+    async renamePath(
+        connectionId: string,
+        sourcePathValue: string,
+        destinationPathValue: string,
+    ): Promise<void> {
+        const sftp =
+            await this.getSession(
+                connectionId,
+            );
+
+        const sourcePath =
+            this.requireMutableRemotePath(
+                sourcePathValue,
+                "sourcePath",
+            );
+
+        const destinationPath =
+            this.requireMutableRemotePath(
+                destinationPathValue,
+                "destinationPath",
+            );
+
+        if (
+            sourcePath === destinationPath
+        ) {
+            throw new Error(
+                "The new remote path must be different from the current path.",
+            );
+        }
+
+        await this.rename(
+            sftp,
+            sourcePath,
+            destinationPath,
+        );
+    }
+
+    async deleteFile(
+        connectionId: string,
+        requestedPath: string,
+    ): Promise<void> {
+        const remotePath =
+            this.requireMutableRemotePath(
+                requestedPath,
+                "remotePath",
+            );
+
+        const details =
+            await this.statPath(
+                connectionId,
+                remotePath,
+            );
+
+        if (
+            details.type === "directory"
+        ) {
+            throw new Error(
+                "The selected remote path is a directory. Use deleteDirectory instead.",
+            );
+        }
+
+        const sftp =
+            await this.getSession(
+                connectionId,
+            );
+
+        await this.unlink(
+            sftp,
+            remotePath,
+        );
+    }
+
+    async createDirectory(
+        connectionId: string,
+        requestedPath: string,
+    ): Promise<void> {
+        const remotePath =
+            this.requireMutableRemotePath(
+                requestedPath,
+                "remotePath",
+            );
+
+        const sftp =
+            await this.getSession(
+                connectionId,
+            );
+
+        await this.mkdir(
+            sftp,
+            remotePath,
+        );
+    }
+
+    async deleteDirectory(
+        connectionId: string,
+        requestedPath: string,
+    ): Promise<void> {
+        const remotePath =
+            this.requireMutableRemotePath(
+                requestedPath,
+                "remotePath",
+            );
+
+        const details =
+            await this.statPath(
+                connectionId,
+                remotePath,
+            );
+
+        if (
+            details.type !== "directory"
+        ) {
+            throw new Error(
+                "The selected remote path is not a directory.",
+            );
+        }
+
+        const sftp =
+            await this.getSession(
+                connectionId,
+            );
+
+        /*
+         * SFTP rmdir only removes an empty directory.
+         * A non-empty folder should be rejected by the server.
+         */
+        await this.rmdir(
+            sftp,
+            remotePath,
+        );
+    }
+
     closeForConnection(connectionId: string): void {
         const sessionPromise =
             this.sessions.get(connectionId);
@@ -226,6 +433,169 @@ export class SftpManager {
             this.sessions.delete(connectionId);
             throw error;
         }
+    }
+
+    private requireRemotePath(
+        remotePathValue: string,
+        fieldName: string,
+    ): string {
+        const remotePath =
+            remotePathValue.trim();
+
+        if (!remotePath) {
+            throw new Error(
+                `${fieldName} must be a non-empty remote path.`,
+            );
+        }
+
+        return remotePath;
+    }
+
+    private requireMutableRemotePath(
+        remotePathValue: string,
+        fieldName: string,
+    ): string {
+        const remotePath =
+            this.requireRemotePath(
+                remotePathValue,
+                fieldName,
+            );
+
+        const normalizedPath =
+            path.posix.normalize(
+                remotePath,
+            );
+
+        /*
+         * Never allow mutation methods to target a root,
+         * current-directory, or parent-directory reference.
+         */
+        if (
+            normalizedPath === "/" ||
+            normalizedPath === "." ||
+            normalizedPath === ".."
+        ) {
+            throw new Error(
+                `Refusing to modify protected remote path: ${remotePath}`,
+            );
+        }
+
+        return remotePath;
+    }
+
+    private lstat(
+        sftp: SFTPWrapper,
+        remotePath: string,
+    ): Promise<RemoteAttributes> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.lstat(
+                    remotePath,
+                    (
+                        error,
+                        attributes,
+                    ) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve(
+                            attributes,
+                        );
+                    },
+                );
+            },
+        );
+    }
+
+    private rename(
+        sftp: SFTPWrapper,
+        sourcePath: string,
+        destinationPath: string,
+    ): Promise<void> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.rename(
+                    sourcePath,
+                    destinationPath,
+                    (error) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve();
+                    },
+                );
+            },
+        );
+    }
+
+    private unlink(
+        sftp: SFTPWrapper,
+        remotePath: string,
+    ): Promise<void> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.unlink(
+                    remotePath,
+                    (error) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve();
+                    },
+                );
+            },
+        );
+    }
+
+    private mkdir(
+        sftp: SFTPWrapper,
+        remotePath: string,
+    ): Promise<void> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.mkdir(
+                    remotePath,
+                    {
+                        mode: 0o755,
+                    },
+                    (error) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve();
+                    },
+                );
+            },
+        );
+    }
+
+    private rmdir(
+        sftp: SFTPWrapper,
+        remotePath: string,
+    ): Promise<void> {
+        return new Promise(
+            (resolve, reject) => {
+                sftp.rmdir(
+                    remotePath,
+                    (error) => {
+                        if (error) {
+                            reject(error);
+                            return;
+                        }
+
+                        resolve();
+                    },
+                );
+            },
+        );
     }
 
     private realpath(

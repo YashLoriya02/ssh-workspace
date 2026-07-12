@@ -5,6 +5,7 @@ import {
     useState,
     useRef,
     type FormEvent,
+    type MouseEvent as ReactMouseEvent,
 } from "react";
 
 import {
@@ -18,7 +19,23 @@ import {
     open as openDialog,
     save,
 } from "@tauri-apps/plugin-dialog";
-import { ArrowUp, Download, Loader, RefreshCcw } from "lucide-react";
+
+import {
+    ArrowUp,
+    CheckCircle,
+    Copy,
+    Download,
+    FileText,
+    FolderOpen,
+    FolderPlus,
+    Info,
+    Loader,
+    Pencil,
+    RefreshCcw,
+    Trash2,
+    Upload,
+    X,
+} from "lucide-react";
 
 import {
     getCurrentWebview,
@@ -44,6 +61,30 @@ interface Breadcrumb {
 
 interface LoadDirectoryOptions {
     forceRefresh?: boolean;
+}
+
+interface RemoteContextMenuState {
+    x: number;
+    y: number;
+    entry: RemoteFileEntry | null;
+}
+
+interface RemoteDetailsDialogState {
+    entry: RemoteFileEntry;
+    loading: boolean;
+    error: string;
+}
+
+interface RemoteRenameDialogState {
+    entry: RemoteFileEntry;
+    name: string;
+    error: string;
+}
+
+interface NewFolderDialogState {
+    parentPath: string;
+    name: string;
+    error: string;
 }
 
 const DEFAULT_DIRECTORY_CACHE_KEY =
@@ -90,6 +131,93 @@ function getRemoteParentDirectory(
         0,
         lastSlashIndex,
     );
+}
+
+function getRemoteEntryTypeLabel(
+    type: RemoteFileEntry["type"],
+): string {
+    switch (type) {
+        case "directory":
+            return "Directory";
+
+        case "file":
+            return "File";
+
+        case "symlink":
+            return "Symbolic link";
+
+        default:
+            return "Other";
+    }
+}
+
+function validateRemoteName(
+    value: string,
+): string | null {
+    const name = value.trim();
+
+    if (!name) {
+        return "Enter a name.";
+    }
+
+    if (
+        name === "." ||
+        name === ".."
+    ) {
+        return `"${name}" cannot be used as a file or folder name.`;
+    }
+
+    if (name.includes("/")) {
+        return "Names cannot contain a forward slash.";
+    }
+
+    if (name.includes("\0")) {
+        return "Names cannot contain a null character.";
+    }
+
+    return null;
+}
+
+async function copyTextToClipboard(
+    value: string,
+): Promise<void> {
+    if (
+        navigator.clipboard &&
+        window.isSecureContext
+    ) {
+        await navigator.clipboard.writeText(
+            value,
+        );
+
+        return;
+    }
+
+    const textarea =
+        document.createElement("textarea");
+
+    textarea.value = value;
+    textarea.readOnly = true;
+
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    textarea.style.pointerEvents = "none";
+
+    document.body.appendChild(
+        textarea,
+    );
+
+    textarea.select();
+
+    const copied =
+        document.execCommand("copy");
+
+    textarea.remove();
+
+    if (!copied) {
+        throw new Error(
+            "Unable to copy the remote path.",
+        );
+    }
 }
 
 function formatFileSize(bytes: number): string {
@@ -226,6 +354,49 @@ export function RemoteFileExplorer({
     const [selectedPath, setSelectedPath] =
         useState<string | null>(null);
 
+    const [
+        contextMenu,
+        setContextMenu,
+    ] = useState<RemoteContextMenuState | null>(
+        null,
+    );
+
+    const [
+        detailsDialog,
+        setDetailsDialog,
+    ] = useState<RemoteDetailsDialogState | null>(
+        null,
+    );
+
+    const [
+        renameDialog,
+        setRenameDialog,
+    ] = useState<RemoteRenameDialogState | null>(
+        null,
+    );
+
+    const [
+        newFolderDialog,
+        setNewFolderDialog,
+    ] = useState<NewFolderDialogState | null>(
+        null,
+    );
+
+    const [
+        isMutating,
+        setIsMutating,
+    ] = useState(false);
+
+    const [
+        toastMessage,
+        setToastMessage,
+    ] = useState("");
+
+    const toastTimerRef =
+        useRef<ReturnType<typeof setTimeout> | null>(
+            null,
+        );
+
     const breadcrumbs = useMemo(
         () =>
             listing
@@ -256,11 +427,135 @@ export function RemoteFileExplorer({
     const [isUploading, setIsUploading] =
         useState(false);
 
+    function showToast(
+        message: string,
+    ): void {
+        if (toastTimerRef.current) {
+            clearTimeout(
+                toastTimerRef.current,
+            );
+        }
+
+        setToastMessage(message);
+
+        toastTimerRef.current =
+            setTimeout(() => {
+                setToastMessage("");
+                toastTimerRef.current = null;
+            }, 2_500);
+    }
+
+    useEffect(() => {
+        return () => {
+            if (toastTimerRef.current) {
+                clearTimeout(
+                    toastTimerRef.current,
+                );
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!contextMenu) {
+            return;
+        }
+
+        function handleOutsidePointerDown(
+            event: PointerEvent,
+        ): void {
+            if (
+                event.target instanceof Element &&
+                event.target.closest(
+                    ".remote-context-menu",
+                )
+            ) {
+                return;
+            }
+
+            setContextMenu(null);
+        }
+
+        function handleKeyDown(
+            event: KeyboardEvent,
+        ): void {
+            if (event.key === "Escape") {
+                setContextMenu(null);
+            }
+        }
+
+        function handleDismiss(): void {
+            setContextMenu(null);
+        }
+
+        document.addEventListener(
+            "pointerdown",
+            handleOutsidePointerDown,
+        );
+
+        document.addEventListener(
+            "keydown",
+            handleKeyDown,
+        );
+
+        document.addEventListener(
+            "scroll",
+            handleDismiss,
+            true,
+        );
+
+        window.addEventListener(
+            "resize",
+            handleDismiss,
+        );
+
+        window.addEventListener(
+            "blur",
+            handleDismiss,
+        );
+
+        return () => {
+            document.removeEventListener(
+                "pointerdown",
+                handleOutsidePointerDown,
+            );
+
+            document.removeEventListener(
+                "keydown",
+                handleKeyDown,
+            );
+
+            document.removeEventListener(
+                "scroll",
+                handleDismiss,
+                true,
+            );
+
+            window.removeEventListener(
+                "resize",
+                handleDismiss,
+            );
+
+            window.removeEventListener(
+                "blur",
+                handleDismiss,
+            );
+        };
+    }, [contextMenu]);
+
+    useEffect(() => {
+        if (!isActive) {
+            setContextMenu(null);
+        }
+    }, [isActive]);
+
     const uploadFiles = useCallback(
         async (
             localPaths: string[],
+            destinationListing:
+                RemoteDirectoryListing | null =
+                listing,
         ): Promise<void> => {
-            if (!listing) {
+            if (!destinationListing) {
                 setErrorMessage(
                     "Wait for the remote directory to load before uploading.",
                 );
@@ -286,7 +581,7 @@ export function RemoteFileExplorer({
                             getLocalFileName(localPath);
 
                         const existingEntry =
-                            listing.entries.find(
+                            destinationListing.entries.find(
                                 (entry) =>
                                     entry.name === name,
                             );
@@ -296,7 +591,7 @@ export function RemoteFileExplorer({
                             name,
                             existingEntry,
                             remotePath: joinRemotePath(
-                                listing.path,
+                                destinationListing.path,
                                 name,
                             ),
                         };
@@ -440,15 +735,21 @@ export function RemoteFileExplorer({
         ],
     );
 
-    async function handleChooseFiles(): Promise<void> {
+    async function handleChooseFiles(
+        targetDirectoryPath?: string,
+    ): Promise<void> {
         setErrorMessage("");
+        setContextMenu(null);
 
         try {
-            const selected = await openDialog({
-                title: "Select files to upload",
-                multiple: true,
-                directory: false,
-            });
+            const selected =
+                await openDialog({
+                    title:
+                        "Select files to upload",
+
+                    multiple: true,
+                    directory: false,
+                });
 
             if (!selected) {
                 return;
@@ -459,7 +760,49 @@ export function RemoteFileExplorer({
                     ? selected
                     : [selected];
 
-            await uploadFiles(localPaths);
+            let destinationListing =
+                listing;
+
+            if (
+                targetDirectoryPath &&
+                listing?.path !==
+                targetDirectoryPath
+            ) {
+                const cacheKey =
+                    getDirectoryCacheKey(
+                        targetDirectoryPath,
+                    );
+
+                destinationListing =
+                    directoryCacheRef.current.get(
+                        cacheKey,
+                    ) ?? null;
+
+                if (!destinationListing) {
+                    destinationListing =
+                        await backendClient.listRemoteDirectory(
+                            connectionId,
+                            targetDirectoryPath,
+                        );
+
+                    directoryCacheRef.current.set(
+                        cacheKey,
+                        destinationListing,
+                    );
+
+                    directoryCacheRef.current.set(
+                        getDirectoryCacheKey(
+                            destinationListing.path,
+                        ),
+                        destinationListing,
+                    );
+                }
+            }
+
+            await uploadFiles(
+                localPaths,
+                destinationListing,
+            );
         } catch (error) {
             setErrorMessage(
                 error instanceof Error
@@ -596,6 +939,7 @@ export function RemoteFileExplorer({
 
             setErrorMessage("");
             setSelectedPath(null);
+            setContextMenu(null);
 
             /*
              * Return immediately from the session cache.
@@ -686,6 +1030,93 @@ export function RemoteFileExplorer({
         },
         [connectionId],
     );
+
+    const invalidateCachedDirectory =
+        useCallback(
+            (
+                remoteDirectoryPath: string,
+            ): void => {
+                const cache =
+                    directoryCacheRef.current;
+
+                for (
+                    const [
+                        cacheKey,
+                        cachedListing,
+                    ] of cache.entries()
+                ) {
+                    if (
+                        cacheKey ===
+                        getDirectoryCacheKey(
+                            remoteDirectoryPath,
+                        ) ||
+                        cachedListing.path ===
+                        remoteDirectoryPath
+                    ) {
+                        cache.delete(
+                            cacheKey,
+                        );
+                    }
+                }
+            },
+            [],
+        );
+
+    const invalidateCachedTree =
+        useCallback(
+            (
+                remoteRootPath: string,
+            ): void => {
+                const normalizedRoot =
+                    remoteRootPath === "/"
+                        ? "/"
+                        : remoteRootPath.replace(
+                            /\/+$/u,
+                            "",
+                        );
+
+                const cache =
+                    directoryCacheRef.current;
+
+                for (
+                    const [
+                        cacheKey,
+                        cachedListing,
+                    ] of cache.entries()
+                ) {
+                    const cachedPath =
+                        cachedListing.path;
+
+                    const belongsToTree =
+                        cachedPath ===
+                        normalizedRoot ||
+                        cachedPath.startsWith(
+                            `${normalizedRoot}/`,
+                        );
+
+                    const keyBelongsToTree =
+                        cacheKey !==
+                        DEFAULT_DIRECTORY_CACHE_KEY &&
+                        (
+                            cacheKey ===
+                            normalizedRoot ||
+                            cacheKey.startsWith(
+                                `${normalizedRoot}/`,
+                            )
+                        );
+
+                    if (
+                        belongsToTree ||
+                        keyBelongsToTree
+                    ) {
+                        cache.delete(
+                            cacheKey,
+                        );
+                    }
+                }
+            },
+            [],
+        );
 
     useEffect(() => {
         return backendClient.subscribeToEvents(
@@ -796,6 +1227,487 @@ export function RemoteFileExplorer({
         void loadDirectory(entry.path);
     }
 
+    function handleContextMenuOpen(
+        event:
+            ReactMouseEvent<HTMLElement>,
+        entry: RemoteFileEntry | null,
+    ): void {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (
+            loading ||
+            isMutating ||
+            !listing
+        ) {
+            return;
+        }
+
+        const estimatedWidth = 224;
+
+        const estimatedHeight =
+            entry
+                ? 340
+                : 220;
+
+        const margin = 8;
+
+        const x = Math.max(
+            margin,
+            Math.min(
+                event.clientX,
+                window.innerWidth -
+                estimatedWidth -
+                margin,
+            ),
+        );
+
+        const y = Math.max(
+            margin,
+            Math.min(
+                event.clientY,
+                window.innerHeight -
+                estimatedHeight -
+                margin,
+            ),
+        );
+
+        setSelectedPath(
+            entry?.path ?? null,
+        );
+
+        setContextMenu({
+            x,
+            y,
+            entry,
+        });
+    }
+
+    async function handleCopyRemotePath(
+        remotePath: string,
+    ): Promise<void> {
+        setContextMenu(null);
+        setErrorMessage("");
+
+        try {
+            await copyTextToClipboard(
+                remotePath,
+            );
+
+            showToast(
+                "Remote path copied",
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        }
+    }
+
+    async function handleShowDetails(
+        entry: RemoteFileEntry,
+    ): Promise<void> {
+        setContextMenu(null);
+
+        setDetailsDialog({
+            entry,
+            loading: true,
+            error: "",
+        });
+
+        try {
+            const freshEntry =
+                await backendClient.statRemotePath(
+                    connectionId,
+                    entry.path,
+                );
+
+            setDetailsDialog({
+                entry: freshEntry,
+                loading: false,
+                error: "",
+            });
+        } catch (error) {
+            setDetailsDialog({
+                entry,
+                loading: false,
+
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : String(error),
+            });
+        }
+    }
+
+    function handleOpenRenameDialog(
+        entry: RemoteFileEntry,
+    ): void {
+        setContextMenu(null);
+
+        setRenameDialog({
+            entry,
+            name: entry.name,
+            error: "",
+        });
+    }
+
+    async function handleRenameSubmit(
+        event: FormEvent<HTMLFormElement>,
+    ): Promise<void> {
+        event.preventDefault();
+
+        if (
+            !renameDialog ||
+            isMutating
+        ) {
+            return;
+        }
+
+        const validationError =
+            validateRemoteName(
+                renameDialog.name,
+            );
+
+        if (validationError) {
+            setRenameDialog({
+                ...renameDialog,
+                error: validationError,
+            });
+
+            return;
+        }
+
+        const newName =
+            renameDialog.name.trim();
+
+        if (
+            newName ===
+            renameDialog.entry.name
+        ) {
+            setRenameDialog(null);
+            return;
+        }
+
+        const parentPath =
+            getRemoteParentDirectory(
+                renameDialog.entry.path,
+            );
+
+        const destinationPath =
+            joinRemotePath(
+                parentPath,
+                newName,
+            );
+
+        const alreadyExists =
+            listing?.path ===
+            parentPath &&
+            listing.entries.some(
+                (entry) =>
+                    entry.name ===
+                    newName &&
+                    entry.path !==
+                    renameDialog.entry.path,
+            );
+
+        if (alreadyExists) {
+            setRenameDialog({
+                ...renameDialog,
+
+                error:
+                    `"${newName}" already exists in this directory.`,
+            });
+
+            return;
+        }
+
+        setIsMutating(true);
+        setErrorMessage("");
+
+        try {
+            await backendClient.renameRemotePath(
+                connectionId,
+                renameDialog.entry.path,
+                destinationPath,
+            );
+
+            invalidateCachedDirectory(
+                parentPath,
+            );
+
+            invalidateCachedTree(
+                renameDialog.entry.path,
+            );
+
+            invalidateCachedTree(
+                destinationPath,
+            );
+
+            setRenameDialog(null);
+            setSelectedPath(null);
+
+            if (
+                listing?.path ===
+                parentPath
+            ) {
+                await loadDirectory(
+                    parentPath,
+                    {
+                        forceRefresh: true,
+                    },
+                );
+            }
+
+            showToast(
+                `Renamed to ${newName}`,
+            );
+        } catch (error) {
+            setRenameDialog((current) =>
+                current
+                    ? {
+                        ...current,
+
+                        error:
+                            error instanceof
+                                Error
+                                ? error.message
+                                : String(
+                                    error,
+                                ),
+                    }
+                    : null,
+            );
+        } finally {
+            setIsMutating(false);
+        }
+    }
+
+    async function handleDeleteEntry(
+        entry: RemoteFileEntry,
+    ): Promise<void> {
+        setContextMenu(null);
+
+        const isDirectory =
+            entry.type === "directory";
+
+        const confirmed =
+            await confirmDialog(
+                [
+                    isDirectory
+                        ? `Delete folder "${entry.name}"?`
+                        : `Delete "${entry.name}"?`,
+
+                    "",
+
+                    isDirectory
+                        ? "Only empty folders can currently be deleted."
+                        : "This action cannot be undone.",
+
+                    "",
+                    entry.path,
+                ].join("\n"),
+                {
+                    title:
+                        isDirectory
+                            ? "Delete remote folder?"
+                            : "Delete remote file?",
+
+                    kind: "warning",
+                },
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setIsMutating(true);
+        setErrorMessage("");
+
+        const parentPath =
+            getRemoteParentDirectory(
+                entry.path,
+            );
+
+        try {
+            if (isDirectory) {
+                await backendClient.deleteRemoteDirectory(
+                    connectionId,
+                    entry.path,
+                );
+            } else {
+                await backendClient.deleteRemoteFile(
+                    connectionId,
+                    entry.path,
+                );
+            }
+
+            invalidateCachedDirectory(
+                parentPath,
+            );
+
+            invalidateCachedTree(
+                entry.path,
+            );
+
+            setSelectedPath(null);
+
+            if (
+                listing?.path ===
+                parentPath
+            ) {
+                await loadDirectory(
+                    parentPath,
+                    {
+                        forceRefresh: true,
+                    },
+                );
+            }
+
+            showToast(
+                isDirectory
+                    ? `Deleted folder ${entry.name}`
+                    : `Deleted ${entry.name}`,
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        } finally {
+            setIsMutating(false);
+        }
+    }
+
+    function handleOpenNewFolderDialog(
+        parentPath: string,
+    ): void {
+        setContextMenu(null);
+
+        setNewFolderDialog({
+            parentPath,
+            name: "",
+            error: "",
+        });
+    }
+
+    async function handleCreateFolderSubmit(
+        event: FormEvent<HTMLFormElement>,
+    ): Promise<void> {
+        event.preventDefault();
+
+        if (
+            !newFolderDialog ||
+            isMutating
+        ) {
+            return;
+        }
+
+        const validationError =
+            validateRemoteName(
+                newFolderDialog.name,
+            );
+
+        if (validationError) {
+            setNewFolderDialog({
+                ...newFolderDialog,
+                error: validationError,
+            });
+
+            return;
+        }
+
+        const folderName =
+            newFolderDialog.name.trim();
+
+        const remotePath =
+            joinRemotePath(
+                newFolderDialog.parentPath,
+                folderName,
+            );
+
+        const alreadyExists =
+            listing?.path ===
+            newFolderDialog.parentPath &&
+            listing.entries.some(
+                (entry) =>
+                    entry.name ===
+                    folderName,
+            );
+
+        if (alreadyExists) {
+            setNewFolderDialog({
+                ...newFolderDialog,
+
+                error:
+                    `"${folderName}" already exists in this directory.`,
+            });
+
+            return;
+        }
+
+        setIsMutating(true);
+        setErrorMessage("");
+
+        try {
+            await backendClient.createRemoteDirectory(
+                connectionId,
+                remotePath,
+            );
+
+            invalidateCachedDirectory(
+                newFolderDialog.parentPath,
+            );
+
+            invalidateCachedTree(
+                remotePath,
+            );
+
+            const parentPath =
+                newFolderDialog.parentPath;
+
+            setNewFolderDialog(null);
+
+            if (
+                listing?.path ===
+                parentPath
+            ) {
+                await loadDirectory(
+                    parentPath,
+                    {
+                        forceRefresh: true,
+                    },
+                );
+            }
+
+            showToast(
+                `Created folder ${folderName}`,
+            );
+        } catch (error) {
+            setNewFolderDialog(
+                (current) =>
+                    current
+                        ? {
+                            ...current,
+
+                            error:
+                                error instanceof
+                                    Error
+                                    ? error.message
+                                    : String(
+                                        error,
+                                    ),
+                        }
+                        : null,
+            );
+        } finally {
+            setIsMutating(false);
+        }
+    }
+
     return (
         <section
             ref={dropTargetRef}
@@ -805,6 +1717,13 @@ export function RemoteFileExplorer({
                     : "file-explorer-panel"
             }
         >
+            {toastMessage && (
+                <div className="file-explorer-toast">
+                    <CheckCircle size={20} />
+                    {toastMessage}
+                </div>
+            )}
+            
             {isDraggingFiles && (
                 <div className="file-drop-overlay">
                     <div className="file-drop-overlay__icon">
@@ -947,7 +1866,15 @@ export function RemoteFileExplorer({
                 </div>
             )}
 
-            <div className="file-list-container">
+            <div
+                className="file-list-container"
+                onContextMenu={(event) =>
+                    handleContextMenuOpen(
+                        event,
+                        null,
+                    )
+                }
+            >
                 {loading ? (
                     <div className="file-explorer-empty">
                         <Loader className="loader" />
@@ -984,6 +1911,12 @@ export function RemoteFileExplorer({
                                         }
                                         onDoubleClick={() =>
                                             handleEntryOpen(entry)
+                                        }
+                                        onContextMenu={(event) =>
+                                            handleContextMenuOpen(
+                                                event,
+                                                entry,
+                                            )
                                         }
                                     >
                                         <td>
@@ -1072,6 +2005,545 @@ export function RemoteFileExplorer({
                     </span>
                 )}
             </footer>
+
+            {contextMenu && (
+                <div
+                    className="remote-context-menu"
+                    style={{
+                        left: contextMenu.x,
+                        top: contextMenu.y,
+                    }}
+                    role="menu"
+                    aria-label="Remote file actions"
+                >
+                    {contextMenu.entry ? (
+                        <>
+                            {contextMenu.entry.type ===
+                                "directory" && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="remote-context-menu__item"
+                                            onClick={() => {
+                                                const entry =
+                                                    contextMenu.entry;
+
+                                                setContextMenu(
+                                                    null,
+                                                );
+
+                                                handleEntryOpen(
+                                                    entry!,
+                                                );
+                                            }}
+                                        >
+                                            <FolderOpen size={15} />
+                                            Open
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className="remote-context-menu__item"
+                                            onClick={() =>
+                                                void handleChooseFiles(
+                                                    contextMenu
+                                                        .entry
+                                                        ?.path,
+                                                )
+                                            }
+                                        >
+                                            <Upload size={15} />
+                                            Upload Here
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className="remote-context-menu__item"
+                                            onClick={() =>
+                                                handleOpenNewFolderDialog(
+                                                    contextMenu
+                                                        .entry
+                                                        ?.path ??
+                                                    listing?.path ??
+                                                    "/",
+                                                )
+                                            }
+                                        >
+                                            <FolderPlus size={15} />
+                                            New Folder
+                                        </button>
+                                    </>
+                                )}
+
+                            {contextMenu.entry.type ===
+                                "file" && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="remote-context-menu__item"
+                                            disabled
+                                            title="Remote editor is coming soon"
+                                        >
+                                            <FileText size={15} />
+                                            Edit
+                                            <span className="remote-context-menu__hint">
+                                                Soon
+                                            </span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className="remote-context-menu__item"
+                                            onClick={() => {
+                                                const entry =
+                                                    contextMenu.entry;
+
+                                                setContextMenu(
+                                                    null,
+                                                );
+
+                                                void handleDownload(
+                                                    entry!,
+                                                );
+                                            }}
+                                        >
+                                            <Download size={15} />
+                                            Download
+                                        </button>
+                                    </>
+                                )}
+
+                            <div className="remote-context-menu__separator" />
+
+                            <button
+                                type="button"
+                                className="remote-context-menu__item"
+                                onClick={() =>
+                                    handleOpenRenameDialog(
+                                        contextMenu.entry!,
+                                    )
+                                }
+                            >
+                                <Pencil size={15} />
+                                Rename
+                            </button>
+
+                            <button
+                                type="button"
+                                className="remote-context-menu__item remote-context-menu__item--danger"
+                                onClick={() =>
+                                    void handleDeleteEntry(
+                                        contextMenu.entry!,
+                                    )
+                                }
+                            >
+                                <Trash2 size={15} />
+                                Delete
+                            </button>
+
+                            <div className="remote-context-menu__separator" />
+
+                            <button
+                                type="button"
+                                className="remote-context-menu__item"
+                                onClick={() =>
+                                    void handleCopyRemotePath(
+                                        contextMenu
+                                            .entry
+                                            ?.path ??
+                                        "",
+                                    )
+                                }
+                            >
+                                <Copy size={15} />
+                                Copy Remote Path
+                            </button>
+
+                            <button
+                                type="button"
+                                className="remote-context-menu__item"
+                                onClick={() =>
+                                    void handleShowDetails(
+                                        contextMenu.entry!,
+                                    )
+                                }
+                            >
+                                <Info size={15} />
+                                Details
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                type="button"
+                                className="remote-context-menu__item"
+                                onClick={() =>
+                                    void handleChooseFiles()
+                                }
+                            >
+                                <Upload size={15} />
+                                Upload Files
+                            </button>
+
+                            <button
+                                type="button"
+                                className="remote-context-menu__item"
+                                onClick={() =>
+                                    handleOpenNewFolderDialog(
+                                        listing?.path ??
+                                        "/",
+                                    )
+                                }
+                            >
+                                <FolderPlus size={15} />
+                                New Folder
+                            </button>
+
+                            <button
+                                type="button"
+                                className="remote-context-menu__item"
+                                onClick={() => {
+                                    setContextMenu(null);
+
+                                    void loadDirectory(
+                                        listing?.path,
+                                        {
+                                            forceRefresh:
+                                                true,
+                                        },
+                                    );
+                                }}
+                            >
+                                <RefreshCcw size={15} />
+                                Refresh
+                            </button>
+
+                            <div className="remote-context-menu__separator" />
+
+                            <button
+                                type="button"
+                                className="remote-context-menu__item"
+                                onClick={() =>
+                                    void handleCopyRemotePath(
+                                        listing?.path ??
+                                        "",
+                                    )
+                                }
+                            >
+                                <Copy size={15} />
+                                Copy Current Path
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {detailsDialog && (
+                <div
+                    className="remote-dialog-backdrop"
+                    onMouseDown={(event) => {
+                        if (
+                            event.target ===
+                            event.currentTarget
+                        ) {
+                            setDetailsDialog(null);
+                        }
+                    }}
+                >
+                    <section
+                        className="remote-dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="remote-details-title"
+                    >
+                        <header className="remote-dialog__header">
+                            <div>
+                                <h2 id="remote-details-title">
+                                    Details
+                                </h2>
+
+                                <p>
+                                    {detailsDialog.entry.name}
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="remote-dialog__close"
+                                onClick={() =>
+                                    setDetailsDialog(null)
+                                }
+                                aria-label="Close details"
+                            >
+                                <X size={17} />
+                            </button>
+                        </header>
+
+                        <div className="remote-dialog__body">
+                            {detailsDialog.loading ? (
+                                <div className="remote-dialog__loading">
+                                    <Loader className="loader" />
+                                    Loading fresh details…
+                                </div>
+                            ) : (
+                                <>
+                                    {detailsDialog.error && (
+                                        <div className="remote-dialog__error">
+                                            {detailsDialog.error}
+                                        </div>
+                                    )}
+
+                                    <dl className="remote-details-grid">
+                                        <dt>Name</dt>
+                                        <dd>
+                                            {detailsDialog.entry.name}
+                                        </dd>
+
+                                        <dt>Type</dt>
+                                        <dd>
+                                            {getRemoteEntryTypeLabel(
+                                                detailsDialog
+                                                    .entry
+                                                    .type,
+                                            )}
+                                        </dd>
+
+                                        <dt>Remote path</dt>
+                                        <dd className="remote-details-path">
+                                            {detailsDialog.entry.path}
+                                        </dd>
+
+                                        <dt>Size</dt>
+                                        <dd>
+                                            {formatFileSize(
+                                                detailsDialog
+                                                    .entry
+                                                    .size,
+                                            )}
+                                            {" · "}
+                                            {detailsDialog.entry.size.toLocaleString()}
+                                            {" bytes"}
+                                        </dd>
+
+                                        <dt>Modified</dt>
+                                        <dd>
+                                            {formatModifiedTime(
+                                                detailsDialog
+                                                    .entry
+                                                    .modifiedAt,
+                                            )}
+                                        </dd>
+
+                                        <dt>Permissions</dt>
+                                        <dd>
+                                            {detailsDialog.entry.permissions ??
+                                                "—"}
+                                        </dd>
+
+                                        <dt>Owner UID</dt>
+                                        <dd>
+                                            {detailsDialog.entry.uid ??
+                                                "—"}
+                                        </dd>
+
+                                        <dt>Group GID</dt>
+                                        <dd>
+                                            {detailsDialog.entry.gid ??
+                                                "—"}
+                                        </dd>
+                                    </dl>
+                                </>
+                            )}
+                        </div>
+                    </section>
+                </div>
+            )}
+
+            {renameDialog && (
+                <div className="remote-dialog-backdrop">
+                    <form
+                        className="remote-dialog remote-dialog--small"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="remote-rename-title"
+                        onSubmit={(event) =>
+                            void handleRenameSubmit(
+                                event,
+                            )
+                        }
+                    >
+                        <header className="remote-dialog__header">
+                            <div>
+                                <h2 id="remote-rename-title">
+                                    Rename
+                                </h2>
+
+                                <p>
+                                    {renameDialog.entry.path}
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="remote-dialog__close"
+                                disabled={isMutating}
+                                onClick={() =>
+                                    setRenameDialog(null)
+                                }
+                                aria-label="Close rename dialog"
+                            >
+                                <X size={17} />
+                            </button>
+                        </header>
+
+                        <div className="remote-dialog__body">
+                            <label>
+                                <span>New name</span>
+
+                                <input
+                                    autoFocus
+                                    value={renameDialog.name}
+                                    disabled={isMutating}
+                                    onChange={(event) =>
+                                        setRenameDialog({
+                                            ...renameDialog,
+
+                                            name:
+                                                event.target
+                                                    .value,
+
+                                            error: "",
+                                        })
+                                    }
+                                />
+                            </label>
+
+                            {renameDialog.error && (
+                                <div className="remote-dialog__error">
+                                    {renameDialog.error}
+                                </div>
+                            )}
+                        </div>
+
+                        <footer className="remote-dialog__actions">
+                            <button
+                                type="button"
+                                className="secondary-button"
+                                disabled={isMutating}
+                                onClick={() =>
+                                    setRenameDialog(null)
+                                }
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                type="submit"
+                                disabled={isMutating}
+                            >
+                                {isMutating
+                                    ? "Renaming…"
+                                    : "Rename"}
+                            </button>
+                        </footer>
+                    </form>
+                </div>
+            )}
+
+            {newFolderDialog && (
+                <div className="remote-dialog-backdrop">
+                    <form
+                        className="remote-dialog remote-dialog--small"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="remote-new-folder-title"
+                        onSubmit={(event) =>
+                            void handleCreateFolderSubmit(
+                                event,
+                            )
+                        }
+                    >
+                        <header className="remote-dialog__header">
+                            <div>
+                                <h2 id="remote-new-folder-title">
+                                    New Folder
+                                </h2>
+
+                                <p>
+                                    Inside{" "}
+                                    {newFolderDialog.parentPath}
+                                </p>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="remote-dialog__close"
+                                disabled={isMutating}
+                                onClick={() =>
+                                    setNewFolderDialog(null)
+                                }
+                                aria-label="Close new-folder dialog"
+                            >
+                                <X size={17} />
+                            </button>
+                        </header>
+
+                        <div className="remote-dialog__body">
+                            <label>
+                                <span>Folder name</span>
+
+                                <input
+                                    autoFocus
+                                    value={
+                                        newFolderDialog.name
+                                    }
+                                    disabled={isMutating}
+                                    placeholder="new-folder"
+                                    onChange={(event) =>
+                                        setNewFolderDialog({
+                                            ...newFolderDialog,
+
+                                            name:
+                                                event.target
+                                                    .value,
+
+                                            error: "",
+                                        })
+                                    }
+                                />
+                            </label>
+
+                            {newFolderDialog.error && (
+                                <div className="remote-dialog__error">
+                                    {newFolderDialog.error}
+                                </div>
+                            )}
+                        </div>
+
+                        <footer className="remote-dialog__actions">
+                            <button
+                                type="button"
+                                className="secondary-button"
+                                disabled={isMutating}
+                                onClick={() =>
+                                    setNewFolderDialog(null)
+                                }
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                type="submit"
+                                disabled={isMutating}
+                            >
+                                {isMutating
+                                    ? "Creating…"
+                                    : "Create Folder"}
+                            </button>
+                        </footer>
+                    </form>
+                </div>
+            )}
         </section>
     );
 }
