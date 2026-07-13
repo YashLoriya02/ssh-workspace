@@ -8,10 +8,12 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "sidecar:stop": "powershell -NoProfile -Command \"Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '*ssh-sidecar*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }\"",
+    "sidecar-windows:stop": "powershell -NoProfile -Command \"Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '*ssh-sidecar*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }\"",
+    "sidecar-mac:stop": "pkill -f ssh-sidecar || true",
     "sidecar:build": "npm --prefix sidecar run build",
     "sidecar:package": "npm --prefix sidecar run package:host",
-    "desktop:dev": "npm run sidecar:stop && npm run sidecar:package && tauri dev"
+    "desktop-mac:dev": "npm run sidecar-mac:stop && npm run sidecar:package && tauri dev",
+    "desktop-windows:dev": "npm run sidecar-windows:stop && npm run sidecar:package && tauri dev"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
