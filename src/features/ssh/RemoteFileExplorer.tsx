@@ -35,7 +35,8 @@ import {
     Trash2,
     Upload,
     X,
-    ImageIcon
+    ImageIcon,
+    ArrowDown
 } from "lucide-react";
 
 import {
@@ -442,6 +443,58 @@ export function RemoteFileExplorer({
 
     const [isUploading, setIsUploading] =
         useState(false);
+
+    type FileListSortKey = "name" | "modified";
+    type FileListSortDirection = "asc" | "desc";
+
+    // ...inside the component, alongside isUploading state:
+    const [sortKey, setSortKey] = useState<FileListSortKey>("name");
+    const [sortDirection, setSortDirection] = useState<FileListSortDirection>("asc");
+
+    function handleSortChange(key: FileListSortKey): void {
+        if (key === sortKey) {
+            setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+            return;
+        }
+
+        setSortKey(key);
+        setSortDirection("asc");
+    }
+
+    const sortedEntries = useMemo(() => {
+        if (!listing) {
+            return [];
+        }
+
+        const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+
+        return [...listing.entries].sort((a, b) => {
+            // Directories always float above files, regardless of sort direction.
+            const aIsDirectory = a.type === "directory";
+            const bIsDirectory = b.type === "directory";
+
+            if (aIsDirectory !== bIsDirectory) {
+                return aIsDirectory ? -1 : 1;
+            }
+
+            if (sortKey === "name") {
+                return (
+                    directionMultiplier *
+                    a.name.localeCompare(b.name, undefined, {
+                        numeric: true,
+                        sensitivity: "base",
+                    })
+                );
+            }
+
+            // sortKey === "modified"
+            const aTime = a.modifiedAt ?? -Infinity;
+            const bTime = b.modifiedAt ?? -Infinity;
+
+            return directionMultiplier * (aTime - bTime);
+        });
+    }, [listing, sortKey, sortDirection]);
+
 
     function showToast(
         message: string,
@@ -1944,16 +1997,42 @@ export function RemoteFileExplorer({
                     <table className="file-list">
                         <thead>
                             <tr>
-                                <th>Name</th>
+                                <th>
+                                    <button
+                                        type="button"
+                                        className="file-list-sort-button"
+                                        onClick={() => handleSortChange("name")}
+                                    >
+                                        <span>Name</span>
+                                        {sortKey === "name" && (
+                                            <span aria-hidden="true">
+                                                {sortDirection === "asc" ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+                                            </span>
+                                        )}
+                                    </button>
+                                </th>
                                 <th>Size</th>
-                                <th>Modified</th>
+                                <th>
+                                    <button
+                                        type="button"
+                                        className="file-list-sort-button"
+                                        onClick={() => handleSortChange("modified")}
+                                    >
+                                        <span>Modified</span>
+                                        {sortKey === "modified" && (
+                                            <span aria-hidden="true">
+                                                {sortDirection === "asc" ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+                                            </span>
+                                        )}
+                                    </button>
+                                </th>
                                 <th>Mode</th>
                                 <th aria-label="Actions" />
                             </tr>
                         </thead>
 
                         <tbody>
-                            {listing.entries.map(
+                            {sortedEntries.map(
                                 (entry) => (
                                     <tr
                                         key={entry.path}
