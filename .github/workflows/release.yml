@@ -1,0 +1,92 @@
+name: Build and Release SSH Workspace
+
+on:
+  # Allows you to run it manually from GitHub Actions
+  workflow_dispatch:
+
+  # Also runs when you push a version tag such as v0.1.0
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        include:
+          # Windows 64-bit
+          - name: Windows x64
+            platform: windows-latest
+            args: "--bundles nsis"
+
+          # macOS Apple Silicon: M1, M2, M3, M4...
+          - name: macOS Apple Silicon
+            platform: macos-15
+            args: "--target aarch64-apple-darwin --bundles dmg"
+
+          # macOS Intel
+          - name: macOS Intel
+            platform: macos-15-intel
+            args: "--target x86_64-apple-darwin --bundles dmg"
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install sidecar dependencies
+        run: npm --prefix sidecar ci
+
+      # Important for your project:
+      # builds ssh-sidecar for the runner's operating system and architecture
+      - name: Build SSH sidecar
+        run: npm run sidecar:package
+
+      - name: Build Tauri app and create GitHub Release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        with:
+          tagName: "v__VERSION__"
+          releaseName: "SSH Workspace v__VERSION__"
+          releaseBody: |
+            SSH Workspace desktop application.
+
+            Download the installer suitable for your operating system:
+
+            - Windows x64
+            - macOS Apple Silicon
+            - macOS Intel
+
+          # Creates the release as a draft first.
+          # You can test the files before publishing.
+          releaseDraft: true
+          prerelease: false
+
+          args: ${{ matrix.args }}
