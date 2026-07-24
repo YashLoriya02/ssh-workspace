@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ssh-workspace",
+  "productName": "SSH Workspace",
   "version": "0.1.0",
   "identifier": "com.sshworkspace",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ssh-workspace",
+        "title": "SSH Workspace",
         "width": 800,
         "height": 600
       }
