@@ -35,7 +35,7 @@ import {
     saveKnownHost,
     type KnownHostRecord,
 } from "../../store/known-host-store";
-import { Check, Eye, EyeClosed, EyeOff } from "lucide-react";
+import { Check, Eye, EyeOff } from "lucide-react";
 
 export interface ConnectedWorkspaceDetails {
     connectionId: string;
