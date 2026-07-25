@@ -16,6 +16,9 @@ jobs:
   build:
     name: Build ${{ matrix.name }}
 
+  env:
+    NODE_OPTIONS: "--max-old-space-size=4096"
+
     strategy:
       fail-fast: false
 
@@ -71,7 +74,6 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_OPTIONS: "--max-old-space-size=4096"
 
         with:
           tagName: "v__VERSION__"
