@@ -2,11 +2,24 @@ import {
     useEffect,
     useRef,
     useState,
+    type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { Eraser } from "lucide-react";
+import {
+    SearchAddon,
+    type ISearchOptions,
+    type ISearchResultChangeEvent,
+} from "@xterm/addon-search";
+
+import {
+    ChevronDown,
+    ChevronUp,
+    Eraser,
+    Search,
+    X,
+} from "lucide-react";
 
 import "@xterm/xterm/css/xterm.css";
 
@@ -24,6 +37,37 @@ interface SshTerminalProps {
     port: number;
     username: string;
 }
+
+const EMPTY_SEARCH_RESULT:
+    ISearchResultChangeEvent = {
+    resultIndex: -1,
+    resultCount: 0,
+};
+
+const TERMINAL_SEARCH_OPTIONS:
+    ISearchOptions = {
+    caseSensitive: false,
+
+    decorations: {
+        matchBackground:
+            "#475569",
+
+        matchBorder:
+            "#64748B",
+
+        matchOverviewRuler:
+            "#64748B",
+
+        activeMatchBackground:
+            "#D97706",
+
+        activeMatchBorder:
+            "#FBBF24",
+
+        activeMatchColorOverviewRuler:
+            "#F59E0B",
+    },
+};
 
 function decodeBase64(
     encodedValue: string,
@@ -102,6 +146,16 @@ export function SshTerminal({
     const fitAddonRef =
         useRef<FitAddon | null>(null);
 
+    const searchAddonRef =
+        useRef<SearchAddon | null>(
+            null,
+        );
+
+    const searchInputRef =
+        useRef<HTMLInputElement | null>(
+            null,
+        );
+
     const terminalIdRef =
         useRef<string | null>(null);
 
@@ -119,6 +173,183 @@ export function SshTerminal({
     ] = useState(
         "Opening terminal...",
     );
+
+    const [
+        isSearchOpen,
+        setIsSearchOpen,
+    ] = useState(false);
+
+    const [
+        searchQuery,
+        setSearchQuery,
+    ] = useState("");
+
+    const [
+        searchResult,
+        setSearchResult,
+    ] = useState<ISearchResultChangeEvent>(
+        EMPTY_SEARCH_RESULT,
+    );
+
+    function focusSearchInput(): void {
+        window.requestAnimationFrame(
+            () => {
+                const searchInput =
+                    searchInputRef.current;
+
+                if (!searchInput) {
+                    return;
+                }
+
+                searchInput.focus();
+                searchInput.select();
+            },
+        );
+    }
+
+    function handleOpenTerminalSearch():
+        void {
+        setIsSearchOpen(true);
+
+        focusSearchInput();
+    }
+
+    function clearTerminalSearch(): void {
+        searchAddonRef.current
+            ?.clearDecorations();
+
+        setSearchResult({
+            ...EMPTY_SEARCH_RESULT,
+        });
+    }
+
+    function handleCloseTerminalSearch():
+        void {
+        setIsSearchOpen(false);
+        setSearchQuery("");
+
+        clearTerminalSearch();
+
+        window.requestAnimationFrame(
+            () => {
+                terminalRef.current
+                    ?.focus();
+            },
+        );
+    }
+
+    function runTerminalSearch(
+        direction:
+            | "next"
+            | "previous",
+
+        requestedQuery:
+            string = searchQuery,
+
+        incremental:
+            boolean = false,
+    ): void {
+        const searchAddon =
+            searchAddonRef.current;
+
+        if (!searchAddon) {
+            return;
+        }
+
+        if (!requestedQuery) {
+            clearTerminalSearch();
+            return;
+        }
+
+        if (
+            direction ===
+            "previous"
+        ) {
+            searchAddon.findPrevious(
+                requestedQuery,
+                {
+                    ...TERMINAL_SEARCH_OPTIONS,
+                    incremental: false,
+                },
+            );
+
+            return;
+        }
+
+        searchAddon.findNext(
+            requestedQuery,
+            {
+                ...TERMINAL_SEARCH_OPTIONS,
+                incremental,
+            },
+        );
+    }
+
+    function handleSearchQueryChange(
+        value: string,
+    ): void {
+        setSearchQuery(value);
+
+        if (!value) {
+            clearTerminalSearch();
+            return;
+        }
+
+        setSearchResult({
+            ...EMPTY_SEARCH_RESULT,
+        });
+
+        runTerminalSearch(
+            "next",
+            value,
+            true,
+        );
+    }
+
+    function handleSearchInputKeyDown(
+        event:
+            ReactKeyboardEvent<HTMLInputElement>,
+    ): void {
+        const key =
+            event.key.toLowerCase();
+
+        if (key === "escape") {
+            event.preventDefault();
+            event.stopPropagation();
+
+            handleCloseTerminalSearch();
+            return;
+        }
+
+        if (
+            (
+                event.ctrlKey ||
+                event.metaKey
+            ) &&
+            !event.altKey &&
+            key === "f"
+        ) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            event.currentTarget.select();
+            return;
+        }
+
+        if (
+            key === "enter" ||
+            key === "f3"
+        ) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            runTerminalSearch(
+                event.shiftKey
+                    ? "previous"
+                    : "next",
+            );
+        }
+    }
 
     useEffect(() => {
         const container =
@@ -187,19 +418,26 @@ export function SshTerminal({
         const fitAddon =
             new FitAddon();
 
-        terminalRef.current =
-            terminal;
+        const searchAddon =
+            new SearchAddon();
 
-        fitAddonRef.current =
-            fitAddon;
+        terminalRef.current = terminal;
+        fitAddonRef.current = fitAddon;
+        searchAddonRef.current = searchAddon;
 
-        terminal.loadAddon(
-            fitAddon,
-        );
+        terminal.loadAddon(fitAddon);
+        terminal.loadAddon(searchAddon);
 
-        terminal.open(
-            container,
-        );
+        const searchResultDisposable =
+            searchAddon.onDidChangeResults(
+                (result) => {
+                    setSearchResult(
+                        result,
+                    );
+                },
+            );
+
+        terminal.open(container);
 
         function sendCurrentSize(): void {
             const activeTerminalId =
@@ -245,6 +483,36 @@ export function SshTerminal({
                     80,
                 );
         }
+
+        terminal.attachCustomKeyEventHandler(
+            (event) => {
+                const key =
+                    event.key.toLowerCase();
+
+                const primaryModifierPressed =
+                    event.ctrlKey ||
+                    event.metaKey;
+
+                if (
+                    primaryModifierPressed &&
+                    !event.altKey &&
+                    key === "f"
+                ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    handleOpenTerminalSearch();
+
+                    /*
+                     * Returning false prevents xterm from
+                     * forwarding Ctrl/Cmd+F to the shell.
+                     */
+                    return false;
+                }
+
+                return true;
+            },
+        );
 
         const inputDisposable =
             terminal.onData(
@@ -576,18 +844,16 @@ export function SshTerminal({
             resizeObserver.disconnect();
             unsubscribeEvents();
             inputDisposable.dispose();
+            searchResultDisposable.dispose();
+            searchAddon.clearDecorations();
 
             const activeTerminalId =
                 terminalIdRef.current;
 
-            terminalIdRef.current =
-                null;
-
-            terminalRef.current =
-                null;
-
-            fitAddonRef.current =
-                null;
+            terminalIdRef.current = null;
+            terminalRef.current = null;
+            fitAddonRef.current = null;
+            searchAddonRef.current = null;
 
             if (activeTerminalId) {
                 void backendClient
@@ -683,11 +949,15 @@ export function SshTerminal({
     }, [isActive]);
 
     function handleClearTerminal(): void {
-        const terminal =
-            terminalRef.current;
+        if (isSearchOpen) {
+            setIsSearchOpen(false);
+            setSearchQuery("");
+        }
 
-        const terminalId =
-            terminalIdRef.current;
+        clearTerminalSearch();
+
+        const terminal = terminalRef.current;
+        const terminalId = terminalIdRef.current;
 
         if (!terminal) {
             return;
@@ -808,6 +1078,17 @@ export function SshTerminal({
         terminal.focus();
     }
 
+    const searchResultLabel =
+        !searchQuery
+            ? ""
+            : searchResult.resultCount ===
+                0
+                ? "No matches"
+                : searchResult.resultIndex <
+                    0
+                    ? `${searchResult.resultCount} matches`
+                    : `${searchResult.resultIndex + 1} of ${searchResult.resultCount}`;
+
     return (
         <section className="terminal-panel">
             <header className="terminal-panel__header">
@@ -842,8 +1123,125 @@ export function SshTerminal({
                             Clear
                         </span>
                     </button>
+
+                    <button
+                        type="button"
+                        className={
+                            isSearchOpen
+                                ? "terminal-clear-button terminal-search-button terminal-search-button--active"
+                                : "terminal-clear-button terminal-search-button"
+                        }
+                        onClick={
+                            handleOpenTerminalSearch
+                        }
+                        title="Find in terminal output (Ctrl/Cmd+F)"
+                    >
+                        <Search
+                            size={14}
+                            aria-hidden="true"
+                        />
+
+                        <span>
+                            Find
+                        </span>
+                    </button>
                 </div>
             </header>
+
+            {isSearchOpen && (
+                <div
+                    className="terminal-search-bar"
+                    role="search"
+                    aria-label="Search terminal output"
+                >
+                    <Search
+                        size={14}
+                        className="terminal-search-bar__icon"
+                        aria-hidden="true"
+                    />
+
+                    <input
+                        ref={searchInputRef}
+                        value={searchQuery}
+                        onChange={(event) =>
+                            handleSearchQueryChange(
+                                event.target.value,
+                            )
+                        }
+                        onKeyDown={
+                            handleSearchInputKeyDown
+                        }
+                        placeholder="Search terminal output"
+                        aria-label="Search terminal output"
+                        spellCheck={false}
+                        autoComplete="off"
+                    />
+
+                    <span
+                        className={
+                            searchQuery &&
+                                searchResult.resultCount ===
+                                0
+                                ? "terminal-search-result terminal-search-result--empty"
+                                : "terminal-search-result"
+                        }
+                        aria-live="polite"
+                    >
+                        {searchResultLabel}
+                    </span>
+
+                    <button
+                        type="button"
+                        className="terminal-search-control"
+                        onClick={() =>
+                            runTerminalSearch(
+                                "previous",
+                            )
+                        }
+                        disabled={!searchQuery}
+                        title="Previous match (Shift+Enter)"
+                        aria-label="Previous match"
+                    >
+                        <ChevronUp
+                            size={15}
+                            aria-hidden="true"
+                        />
+                    </button>
+
+                    <button
+                        type="button"
+                        className="terminal-search-control"
+                        onClick={() =>
+                            runTerminalSearch(
+                                "next",
+                            )
+                        }
+                        disabled={!searchQuery}
+                        title="Next match (Enter)"
+                        aria-label="Next match"
+                    >
+                        <ChevronDown
+                            size={15}
+                            aria-hidden="true"
+                        />
+                    </button>
+
+                    <button
+                        type="button"
+                        className="terminal-search-control terminal-search-close"
+                        onClick={
+                            handleCloseTerminalSearch
+                        }
+                        title="Close search (Escape)"
+                        aria-label="Close terminal search"
+                    >
+                        <X
+                            size={15}
+                            aria-hidden="true"
+                        />
+                    </button>
+                </div>
+            )}
 
             <div
                 ref={containerRef}

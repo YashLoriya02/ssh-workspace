@@ -1,6 +1,9 @@
 import {
     useEffect,
+    useRef,
     useState,
+    type KeyboardEvent as ReactKeyboardEvent,
+    type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import {
@@ -43,6 +46,12 @@ import {
     RemoteImageViewer,
 } from "../editor/RemoteImageViewer";
 
+const DEFAULT_TERMINAL_PANE_PERCENT = 67;
+const MIN_TERMINAL_PANE_WIDTH = 400;
+const MIN_FILE_PANE_WIDTH = 0;
+const WORKSPACE_SPLITTER_WIDTH = 12;
+const PANE_KEYBOARD_STEP = 2;
+
 interface WorkspacePageProps {
     connectionId: string;
 
@@ -70,6 +79,26 @@ export function WorkspacePage({
         setConnectionError,
     ] = useState("");
 
+    const workspaceGridRef =
+        useRef<HTMLElement | null>(
+            null,
+        );
+
+    const isResizingWorkspaceRef =
+        useRef(false);
+
+    const [
+        terminalPanePercent,
+        setTerminalPanePercent,
+    ] = useState(
+        DEFAULT_TERMINAL_PANE_PERCENT,
+    );
+
+    const [
+        isResizingWorkspace,
+        setIsResizingWorkspace,
+    ] = useState(false);
+
     const editor =
         useRemoteEditorWorkspace({
             connectionId,
@@ -78,6 +107,245 @@ export function WorkspacePage({
     const isWorkspaceView =
         editor.view ===
         "workspace";
+
+    function getTerminalPaneBounds(): {
+        minimum: number;
+        maximum: number;
+    } | null {
+        const workspaceGrid =
+            workspaceGridRef.current;
+
+        if (!workspaceGrid) {
+            return null;
+        }
+
+        const bounds =
+            workspaceGrid.getBoundingClientRect();
+
+        const availableWidth =
+            bounds.width -
+            WORKSPACE_SPLITTER_WIDTH;
+
+        if (availableWidth <= 0) {
+            return null;
+        }
+
+        const minimum =
+            (
+                MIN_TERMINAL_PANE_WIDTH /
+                availableWidth
+            ) * 100;
+
+        const maximum =
+            100 -
+            (
+                MIN_FILE_PANE_WIDTH /
+                availableWidth
+            ) * 100;
+
+        if (minimum > maximum) {
+            return null;
+        }
+
+        return {
+            minimum,
+            maximum,
+        };
+    }
+
+    function clampTerminalPanePercent(
+        value: number,
+    ): number {
+        const paneBounds =
+            getTerminalPaneBounds();
+
+        if (!paneBounds) {
+            return value;
+        }
+
+        return Math.min(
+            paneBounds.maximum,
+            Math.max(
+                paneBounds.minimum,
+                value,
+            ),
+        );
+    }
+
+    function updateTerminalPaneFromPointer(
+        clientX: number,
+    ): void {
+        const workspaceGrid =
+            workspaceGridRef.current;
+
+        if (!workspaceGrid) {
+            return;
+        }
+
+        const bounds =
+            workspaceGrid.getBoundingClientRect();
+
+        const availableWidth =
+            bounds.width -
+            WORKSPACE_SPLITTER_WIDTH;
+
+        if (availableWidth <= 0) {
+            return;
+        }
+
+        const pointerPosition =
+            clientX -
+            bounds.left -
+            WORKSPACE_SPLITTER_WIDTH / 2;
+
+        const requestedPercent =
+            (
+                pointerPosition /
+                availableWidth
+            ) * 100;
+
+        const nextPercent =
+            clampTerminalPanePercent(
+                requestedPercent,
+            );
+
+        setTerminalPanePercent(
+            Math.round(
+                nextPercent * 10,
+            ) / 10,
+        );
+    }
+
+    function finishWorkspaceResize(
+        splitter:
+            HTMLDivElement,
+        pointerId: number,
+    ): void {
+        isResizingWorkspaceRef.current =
+            false;
+
+        setIsResizingWorkspace(false);
+
+        document.body.classList.remove(
+            "workspace-pane-resizing",
+        );
+
+        if (
+            splitter.hasPointerCapture(
+                pointerId,
+            )
+        ) {
+            splitter.releasePointerCapture(
+                pointerId,
+            );
+        }
+    }
+
+    function handleWorkspaceSplitterPointerDown(
+        event:
+            ReactPointerEvent<HTMLDivElement>,
+    ): void {
+        if (event.button !== 0) {
+            return;
+        }
+
+        event.preventDefault();
+
+        isResizingWorkspaceRef.current =
+            true;
+
+        setIsResizingWorkspace(true);
+
+        document.body.classList.add(
+            "workspace-pane-resizing",
+        );
+
+        event.currentTarget.setPointerCapture(
+            event.pointerId,
+        );
+
+        updateTerminalPaneFromPointer(
+            event.clientX,
+        );
+    }
+
+    function handleWorkspaceSplitterPointerMove(
+        event:
+            ReactPointerEvent<HTMLDivElement>,
+    ): void {
+        if (
+            !isResizingWorkspaceRef.current
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+
+        updateTerminalPaneFromPointer(
+            event.clientX,
+        );
+    }
+
+    function handleWorkspaceSplitterPointerUp(
+        event:
+            ReactPointerEvent<HTMLDivElement>,
+    ): void {
+        finishWorkspaceResize(
+            event.currentTarget,
+            event.pointerId,
+        );
+    }
+
+    function handleWorkspaceSplitterKeyDown(
+        event:
+            ReactKeyboardEvent<HTMLDivElement>,
+    ): void {
+        let difference = 0;
+
+        if (event.key === "ArrowLeft") {
+            difference =
+                -PANE_KEYBOARD_STEP;
+        }
+
+        if (event.key === "ArrowRight") {
+            difference =
+                PANE_KEYBOARD_STEP;
+        }
+
+        if (difference === 0) {
+            return;
+        }
+
+        event.preventDefault();
+
+        setTerminalPanePercent(
+            (currentPercent) =>
+                clampTerminalPanePercent(
+                    currentPercent +
+                    difference,
+                ),
+        );
+    }
+
+    function resetWorkspacePaneSizes():
+        void {
+        setTerminalPanePercent(
+            clampTerminalPanePercent(
+                DEFAULT_TERMINAL_PANE_PERCENT,
+            ),
+        );
+    }
+
+    useEffect(() => {
+        return () => {
+            isResizingWorkspaceRef.current =
+                false;
+
+            document.body.classList.remove(
+                "workspace-pane-resizing",
+            );
+        };
+    }, []);
 
     useEffect(() => {
         return backendClient.subscribeToEvents(
@@ -280,7 +548,24 @@ export function WorkspacePage({
                         : "workspace-content workspace-content--hidden"
                 }
             >
-                <section className="workspace-grid">
+                <section
+                    ref={workspaceGridRef}
+                    className={
+                        isResizingWorkspace
+                            ? "workspace-grid workspace-grid--resizable workspace-grid--resizing"
+                            : "workspace-grid workspace-grid--resizable"
+                    }
+                    style={{
+                        gridTemplateColumns:
+                            [
+                                `minmax(${MIN_TERMINAL_PANE_WIDTH}px, ${terminalPanePercent}fr)`,
+
+                                `${WORKSPACE_SPLITTER_WIDTH}px`,
+
+                                `minmax(${MIN_FILE_PANE_WIDTH}px, ${100 - terminalPanePercent}fr)`,
+                            ].join(" "),
+                    }}
+                >
                     <SshTerminal
                         connectionId={
                             connectionId
@@ -295,6 +580,47 @@ export function WorkspacePage({
                             username
                         }
                     />
+
+                    <div
+                        className="workspace-pane-splitter"
+                        role="separator"
+                        aria-label="Resize terminal and remote files"
+                        aria-orientation="vertical"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={
+                            Math.round(
+                                terminalPanePercent,
+                            )
+                        }
+                        tabIndex={0}
+                        title="Drag to resize. Double-click to reset."
+                        onPointerDown={
+                            handleWorkspaceSplitterPointerDown
+                        }
+                        onPointerMove={
+                            handleWorkspaceSplitterPointerMove
+                        }
+                        onPointerUp={
+                            handleWorkspaceSplitterPointerUp
+                        }
+                        onPointerCancel={
+                            handleWorkspaceSplitterPointerUp
+                        }
+                        onKeyDown={
+                            handleWorkspaceSplitterKeyDown
+                        }
+                        onDoubleClick={
+                            resetWorkspacePaneSizes
+                        }
+                    >
+                        <span className="workspace-pane-splitter__line" />
+                        <span className="workspace-pane-splitter__handle">
+                            <i />
+                            <i />
+                            <i />
+                        </span>
+                    </div>
 
                     <RemoteFileExplorer
                         connectionId={

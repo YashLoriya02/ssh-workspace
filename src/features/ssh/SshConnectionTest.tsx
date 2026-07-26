@@ -29,6 +29,12 @@ import {
 } from "../../store/connection-profile-store";
 
 import {
+    deleteSshPassword,
+    loadSshPassword,
+    saveSshPassword,
+} from "../../store/ssh-credential-store";
+
+import {
     deleteKnownHost,
     loadKnownHost,
     markKnownHostVerified,
@@ -55,6 +61,11 @@ type AuthenticationType =
     | "password"
     | "privateKey";
 
+type SavedPasswordState =
+    | "idle"
+    | "loading"
+    | "loaded";
+
 export function SshConnectionTest({
     onConnected,
 }: SshConnectionTestProps) {
@@ -75,9 +86,9 @@ export function SshConnectionTest({
     const [password, setPassword] = useState("");
     const [privateKey, setPrivateKey] = useState("");
     const [passphrase, setPassphrase] = useState("");
+    const [savedPasswordState, setSavedPasswordState,] = useState<SavedPasswordState>("idle",);
 
-    const [connectionId, setConnectionId] =
-        useState<string | null>(null);
+    const [connectionId, setConnectionId] = useState<string | null>(null);
 
     const [connectionState, setConnectionState] =
         useState("Not connected");
@@ -115,6 +126,8 @@ export function SshConnectionTest({
     ] = useState<KnownHostRecord | null>(
         null,
     );
+
+    const credentialLoadVersionRef = useRef(0);
 
     const securityErrorRef =
         useRef<string | null>(null);
@@ -411,39 +424,168 @@ export function SshConnectionTest({
         };
     }, []);
 
-    async function refreshProfiles():
-        Promise<void> {
+    async function refreshProfiles(): Promise<void> {
         const savedProfiles =
             await loadConnectionProfiles();
 
         setProfiles(savedProfiles);
     }
 
-    function handleSelectProfile(
-        profile: SavedConnectionProfile,
+    function cancelSavedPasswordLoad(
+        clearPassword:
+            boolean = true,
     ): void {
-        setSelectedProfileId(profile.id);
-        setProfileName(profile.name);
+        credentialLoadVersionRef.current +=
+            1;
 
-        setHost(profile.host);
-        setPort(String(profile.port));
-        setUsername(profile.username);
+        setSavedPasswordState(
+            "idle",
+        );
+
+        if (clearPassword) {
+            setPassword("");
+        }
+    }
+
+    function clearAutomaticallyLoadedPassword():
+        void {
+        if (
+            savedPasswordState ===
+            "loaded" ||
+            savedPasswordState ===
+            "loading"
+        ) {
+            cancelSavedPasswordLoad(
+                true,
+            );
+        }
+    }
+
+    async function loadSavedPasswordForProfile(
+        profile:
+            SavedConnectionProfile,
+    ): Promise<void> {
+        const requestVersion =
+            credentialLoadVersionRef.current +
+            1;
+
+        credentialLoadVersionRef.current =
+            requestVersion;
+
+        setPassword("");
+
+        if (
+            profile.authenticationType !==
+            "password"
+        ) {
+            setSavedPasswordState(
+                "idle",
+            );
+
+            return;
+        }
+
+        setSavedPasswordState(
+            "loading",
+        );
+
+        try {
+            const savedPassword =
+                await loadSshPassword(
+                    profile.id,
+                );
+
+            if (
+                credentialLoadVersionRef
+                    .current !==
+                requestVersion
+            ) {
+                return;
+            }
+
+            if (savedPassword) {
+                setPassword(
+                    savedPassword,
+                );
+
+                setSavedPasswordState(
+                    "loaded",
+                );
+            } else {
+                setPassword("");
+
+                setSavedPasswordState(
+                    "idle",
+                );
+            }
+        } catch (error) {
+            if (
+                credentialLoadVersionRef
+                    .current !==
+                requestVersion
+            ) {
+                return;
+            }
+
+            setPassword("");
+
+            setSavedPasswordState(
+                "idle",
+            );
+
+            setProfileError(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        }
+    }
+
+    function handleSelectProfile(
+        profile:
+            SavedConnectionProfile,
+    ): void {
+        setSelectedProfileId(
+            profile.id,
+        );
+
+        setProfileName(
+            profile.name,
+        );
+
+        setHost(
+            profile.host,
+        );
+
+        setPort(
+            String(profile.port),
+        );
+
+        setUsername(
+            profile.username,
+        );
 
         setAuthenticationType(
             profile.authenticationType,
         );
 
-        // Sensitive values are intentionally
-        // not stored in the normal profile store.
         setPassword("");
         setPrivateKey("");
         setPassphrase("");
 
         setErrorMessage("");
         setProfileError("");
+
+        void loadSavedPasswordForProfile(
+            profile,
+        );
     }
 
     function handleNewProfile(): void {
+        cancelSavedPasswordLoad(
+            true,
+        );
+
         setSelectedProfileId(null);
         setProfileName("");
 
@@ -453,7 +595,6 @@ export function SshConnectionTest({
 
         setAuthenticationType("password");
 
-        setPassword("");
         setPrivateKey("");
         setPassphrase("");
 
@@ -466,7 +607,10 @@ export function SshConnectionTest({
     }
 
     async function handleSaveProfile():
-        Promise<SavedConnectionProfile | null> {
+        Promise<
+            SavedConnectionProfile |
+            null
+        > {
         setProfileError("");
 
         const trimmedName =
@@ -480,12 +624,15 @@ export function SshConnectionTest({
             return null;
         }
 
-        const parsedPort = Number(port);
+        const parsedPort =
+            Number(port);
 
         if (
             !host.trim() ||
             !username.trim() ||
-            !Number.isInteger(parsedPort) ||
+            !Number.isInteger(
+                parsedPort,
+            ) ||
             parsedPort < 1 ||
             parsedPort > 65_535
         ) {
@@ -496,18 +643,32 @@ export function SshConnectionTest({
             return null;
         }
 
+        const previousProfile =
+            selectedProfileId
+                ? profiles.find(
+                    (profile) =>
+                        profile.id ===
+                        selectedProfileId,
+                )
+                : undefined;
+
         try {
             const savedProfile =
                 await saveConnectionProfile({
                     ...(selectedProfileId
                         ? {
-                            id: selectedProfileId,
+                            id:
+                                selectedProfileId,
                         }
                         : {}),
 
-                    name: trimmedName,
+                    name:
+                        trimmedName,
+
                     host,
-                    port: parsedPort,
+                    port:
+                        parsedPort,
+
                     username,
 
                     authenticationType,
@@ -516,6 +677,63 @@ export function SshConnectionTest({
             setSelectedProfileId(
                 savedProfile.id,
             );
+
+            /*
+             * Remove the previous saved password when
+             * the profile now points to another account,
+             * server or authentication mechanism.
+             */
+            const credentialIdentityChanged =
+                Boolean(
+                    previousProfile &&
+                    (
+                        previousProfile.host
+                            .trim()
+                            .toLowerCase() !==
+                        host
+                            .trim()
+                            .toLowerCase() ||
+
+                        previousProfile.port !==
+                        parsedPort ||
+
+                        previousProfile.username
+                            .trim() !==
+                        username.trim() ||
+
+                        previousProfile
+                            .authenticationType !==
+                        authenticationType
+                    ),
+                );
+
+            if (
+                credentialIdentityChanged ||
+                authenticationType !==
+                "password"
+            ) {
+                try {
+                    await deleteSshPassword(
+                        savedProfile.id,
+                    );
+
+                    cancelSavedPasswordLoad(
+                        true,
+                    );
+                } catch (credentialError) {
+                    setProfileError(
+                        [
+                            "Profile saved, but its previous password could not be removed.",
+                            credentialError instanceof
+                                Error
+                                ? credentialError.message
+                                : String(
+                                    credentialError,
+                                ),
+                        ].join(" "),
+                    );
+                }
+            }
 
             await refreshProfiles();
 
@@ -532,23 +750,35 @@ export function SshConnectionTest({
     }
 
     async function handleDeleteProfile(
-        profile: SavedConnectionProfile,
+        profile:
+            SavedConnectionProfile,
     ): Promise<void> {
-        const confirmed = window.confirm(
-            `Delete the saved connection "${profile.name}"?`,
-        );
+        const confirmed =
+            window.confirm(
+                `Delete the saved connection "${profile.name}" and its saved password?`,
+            );
 
         if (!confirmed) {
             return;
         }
 
         try {
+            /*
+             * Remove the sensitive credential first.
+             * If this fails, retain the profile so the
+             * user can retry instead of orphaning it.
+             */
+            await deleteSshPassword(
+                profile.id,
+            );
+
             await deleteConnectionProfile(
                 profile.id,
             );
 
             if (
-                selectedProfileId === profile.id
+                selectedProfileId ===
+                profile.id
             ) {
                 handleNewProfile();
             }
@@ -564,7 +794,8 @@ export function SshConnectionTest({
     }
 
     async function handleConnect(
-        event: FormEvent<HTMLFormElement>,
+        event:
+            FormEvent<HTMLFormElement>,
     ): Promise<void> {
         event.preventDefault();
 
@@ -573,10 +804,33 @@ export function SshConnectionTest({
         }
 
         setErrorMessage("");
-        setConnectionState("Connecting...");
+        setProfileError("");
+
+        setConnectionState(
+            "Connecting...",
+        );
+
         setIsConnecting(true);
 
-        securityErrorRef.current = null;
+        securityErrorRef.current =
+            null;
+
+        const normalizedHost =
+            host.trim();
+
+        const normalizedUsername =
+            username.trim();
+
+        const parsedPort =
+            Number(port);
+
+        /*
+         * Capture the password used for this exact
+         * connection attempt. It is persisted only
+         * after connectSsh() succeeds.
+         */
+        const passwordUsed =
+            password;
 
         try {
             if (!backendConnected) {
@@ -584,105 +838,218 @@ export function SshConnectionTest({
             }
 
             const authentication =
-                authenticationType === "password"
+                authenticationType ===
+                    "password"
                     ? {
-                        type: "password" as const,
-                        password,
+                        type:
+                            "password" as const,
+
+                        password:
+                            passwordUsed,
                     }
                     : {
-                        type: "privateKey" as const,
+                        type:
+                            "privateKey" as const,
+
                         privateKey,
+
                         ...(passphrase
-                            ? { passphrase }
+                            ? {
+                                passphrase,
+                            }
                             : {}),
                     };
 
             const rememberedHost =
                 await loadKnownHost(
-                    host.trim(),
-                    Number(port),
+                    normalizedHost,
+                    parsedPort,
                 );
 
             const newConnectionId =
-                await backendClient.connectSsh({
-                    host: host.trim(),
-                    port: Number(port),
-                    username: username.trim(),
+                await backendClient
+                    .connectSsh({
+                        host:
+                            normalizedHost,
 
-                    authentication,
+                        port:
+                            parsedPort,
 
-                    ...(rememberedHost
-                        ? {
-                            knownHostFingerprint:
-                                rememberedHost.fingerprint,
-                        }
-                        : {}),
-                });
+                        username:
+                            normalizedUsername,
 
-            setConnectionId(newConnectionId);
-            setConnectionState("Connected");
+                        authentication,
 
-            let activeProfileId =
-                selectedProfileId;
+                        ...(rememberedHost
+                            ? {
+                                knownHostFingerprint:
+                                    rememberedHost
+                                        .fingerprint,
+                            }
+                            : {}),
+                    });
 
-            if (profileName.trim()) {
-                try {
-                    const savedProfile =
-                        await saveConnectionProfile({
-                            ...(selectedProfileId
-                                ? {
-                                    id: selectedProfileId,
-                                }
-                                : {}),
+            /*
+             * Nothing below this point runs unless
+             * SSH authentication succeeded.
+             */
+            setConnectionId(
+                newConnectionId,
+            );
 
-                            name: profileName,
-                            host: host.trim(),
-                            port: Number(port),
-                            username: username.trim(),
+            setConnectionState(
+                "Connected",
+            );
 
-                            authenticationType,
-                        });
+            /*
+             * Avoid creating a duplicate when the same
+             * host/account already has a saved profile.
+             */
+            const matchingProfile =
+                profiles.find(
+                    (profile) =>
+                        profile.host
+                            .trim()
+                            .toLowerCase() ===
+                        normalizedHost
+                            .toLowerCase() &&
 
-                    activeProfileId =
-                        savedProfile.id;
+                        profile.port ===
+                        parsedPort &&
 
-                    setSelectedProfileId(
-                        savedProfile.id,
-                    );
-                    // } catch (profileSaveError) {
-                    //     console.error(
-                    //         "Unable to save connection profile:",
-                    //         profileSaveError,
-                    //     );
-                    // }
+                        profile.username
+                            .trim() ===
+                        normalizedUsername &&
 
-                } catch (error) {
-                    const message =
-                        securityErrorRef.current ??
-                        (
-                            error instanceof Error
-                                ? error.message
-                                : String(error)
-                        );
+                        profile
+                            .authenticationType ===
+                        authenticationType,
+                );
 
-                    setConnectionState(
-                        securityErrorRef.current
-                            ? "Host key changed"
-                            : "Connection failed",
-                    );
+            const profileIdToSave =
+                selectedProfileId ??
+                matchingProfile?.id;
 
-                    setErrorMessage(message);
-                }
+            const effectiveProfileName =
+                profileName.trim() ||
+                matchingProfile?.name ||
+                `${normalizedUsername}@${normalizedHost}`;
+
+            let savedProfile:
+                SavedConnectionProfile |
+                null = null;
+
+            try {
+                savedProfile =
+                    await saveConnectionProfile({
+                        ...(profileIdToSave
+                            ? {
+                                id:
+                                    profileIdToSave,
+                            }
+                            : {}),
+
+                        name:
+                            effectiveProfileName,
+
+                        host:
+                            normalizedHost,
+
+                        port:
+                            parsedPort,
+
+                        username:
+                            normalizedUsername,
+
+                        authenticationType,
+                    });
+
+                setSelectedProfileId(
+                    savedProfile.id,
+                );
+
+                setProfileName(
+                    savedProfile.name,
+                );
+            } catch (
+            profileSaveError
+            ) {
+                console.error(
+                    "SSH connected, but the profile could not be saved:",
+                    profileSaveError,
+                );
+
+                setProfileError(
+                    [
+                        "Connected, but the connection profile could not be saved.",
+                        profileSaveError instanceof
+                            Error
+                            ? profileSaveError.message
+                            : String(
+                                profileSaveError,
+                            ),
+                    ].join(" "),
+                );
             }
 
-            if (activeProfileId) {
+            if (savedProfile) {
+                try {
+                    if (
+                        authenticationType ===
+                        "password"
+                    ) {
+                        await saveSshPassword(
+                            savedProfile.id,
+                            passwordUsed,
+                        );
+
+                        setSavedPasswordState(
+                            "loaded",
+                        );
+                    } else {
+                        /*
+                         * Switching a profile to
+                         * private-key authentication
+                         * removes an old password.
+                         */
+                        await deleteSshPassword(
+                            savedProfile.id,
+                        );
+
+                        setSavedPasswordState(
+                            "idle",
+                        );
+                    }
+                } catch (
+                credentialError
+                ) {
+                    console.error(
+                        "SSH connected, but the password could not be saved securely:",
+                        credentialError,
+                    );
+
+                    setProfileError(
+                        [
+                            "Connected, but the password could not be saved securely.",
+                            credentialError instanceof
+                                Error
+                                ? credentialError.message
+                                : String(
+                                    credentialError,
+                                ),
+                        ].join(" "),
+                    );
+                }
+
                 try {
                     await markProfileConnected(
-                        activeProfileId,
+                        savedProfile.id,
                     );
 
                     await refreshProfiles();
-                } catch (profileUpdateError) {
+                } catch (
+                profileUpdateError
+                ) {
                     console.error(
                         "Unable to update recent connection:",
                         profileUpdateError,
@@ -691,18 +1058,26 @@ export function SshConnectionTest({
             }
 
             onConnected({
-                connectionId: newConnectionId,
+                connectionId:
+                    newConnectionId,
 
                 title:
-                    profileName.trim() ||
-                    `${username.trim()}@${host.trim()}`,
+                    savedProfile?.name ??
+                    effectiveProfileName,
 
-                host: host.trim(),
-                port: Number(port),
-                username: username.trim(),
+                host:
+                    normalizedHost,
+
+                port:
+                    parsedPort,
+
+                username:
+                    normalizedUsername,
             });
         } catch (error) {
-            setConnectionState("Connection failed");
+            setConnectionState(
+                "Connection failed",
+            );
 
             setErrorMessage(
                 error instanceof Error
@@ -817,9 +1192,10 @@ export function SshConnectionTest({
                             <span>Host</span>
                             <input
                                 value={host}
-                                onChange={(event) =>
-                                    setHost(event.target.value)
-                                }
+                                onChange={(event) => {
+                                    clearAutomaticallyLoadedPassword();
+                                    setHost(event.target.value);
+                                }}
                                 placeholder="192.168.1.50 or server.example.com"
                                 disabled={Boolean(connectionId)}
                                 autoComplete="off"
@@ -830,9 +1206,10 @@ export function SshConnectionTest({
                             <span>Port</span>
                             <input
                                 value={port}
-                                onChange={(event) =>
-                                    setPort(event.target.value)
-                                }
+                                onChange={(event) => {
+                                    clearAutomaticallyLoadedPassword();
+                                    setPort(event.target.value);
+                                }}
                                 inputMode="numeric"
                                 disabled={Boolean(connectionId)}
                             />
@@ -842,9 +1219,10 @@ export function SshConnectionTest({
                             <span>Username</span>
                             <input
                                 value={username}
-                                onChange={(event) =>
-                                    setUsername(event.target.value)
-                                }
+                                onChange={(event) => {
+                                    clearAutomaticallyLoadedPassword();
+                                    setUsername(event.target.value);
+                                }}
                                 placeholder="ubuntu"
                                 disabled={Boolean(connectionId)}
                                 autoComplete="username"
@@ -855,12 +1233,41 @@ export function SshConnectionTest({
                             <span>Authentication</span>
                             <select
                                 value={authenticationType}
-                                onChange={(event) =>
-                                    setAuthenticationType(
+                                onChange={(event) => {
+                                    const nextAuthenticationType =
                                         event.target
-                                            .value as AuthenticationType,
-                                    )
-                                }
+                                            .value as AuthenticationType;
+
+                                    cancelSavedPasswordLoad(
+                                        true,
+                                    );
+
+                                    setAuthenticationType(
+                                        nextAuthenticationType,
+                                    );
+
+                                    if (
+                                        nextAuthenticationType ===
+                                        "password" &&
+                                        selectedProfileId
+                                    ) {
+                                        const selectedProfile =
+                                            profiles.find(
+                                                (profile) =>
+                                                    profile.id ===
+                                                    selectedProfileId,
+                                            );
+
+                                        if (selectedProfile) {
+                                            void loadSavedPasswordForProfile({
+                                                ...selectedProfile,
+
+                                                authenticationType:
+                                                    "password",
+                                            });
+                                        }
+                                    }
+                                }}
                                 disabled={Boolean(connectionId)}
                             >
                                 <option value="password">
@@ -908,22 +1315,80 @@ export function SshConnectionTest({
 
                     {authenticationType === "password" ? (
                         <label>
-                            <span>Password</span>
+                            <span className="password-label">
+                                <span>Password</span>
+
+                                {savedPasswordState ===
+                                    "loading" && (
+                                        <small className="credential-status">
+                                            Loading saved password…
+                                        </small>
+                                    )}
+
+                                {savedPasswordState ===
+                                    "loaded" && (
+                                        <small className="credential-status credential-status--saved">
+                                            <Check size={12} />
+
+                                            Saved password loaded
+                                        </small>
+                                    )}
+                            </span>
+
                             <div className="pass-div">
                                 <input
-                                    type={isVisible ? "text" : "password"}
-                                    value={password}
-                                    onChange={(event) =>
-                                        setPassword(event.target.value)
+                                    type={
+                                        isVisible
+                                            ? "text"
+                                            : "password"
                                     }
-                                    disabled={Boolean(connectionId)}
+                                    value={password}
+                                    onChange={(event) => {
+                                        /*
+                                         * Prevent an in-flight native
+                                         * credential lookup from overwriting
+                                         * what the user is typing.
+                                         */
+                                        credentialLoadVersionRef
+                                            .current += 1;
+
+                                        setSavedPasswordState(
+                                            "idle",
+                                        );
+
+                                        setPassword(
+                                            event.target.value,
+                                        );
+                                    }}
+                                    disabled={
+                                        Boolean(
+                                            connectionId,
+                                        ) ||
+                                        savedPasswordState ===
+                                        "loading"
+                                    }
                                     autoComplete="current-password"
                                 />
-                                {
-                                    isVisible
-                                        ? <EyeOff onClick={() => setIsVisible(!isVisible)} size={16} />
-                                        : <Eye onClick={() => setIsVisible(!isVisible)} size={16} />
-                                }
+
+                                {isVisible ? (
+                                    <EyeOff
+                                        onClick={() =>
+                                            setIsVisible(
+                                                false,
+                                            )
+                                        }
+                                        size={16}
+                                    />
+                                ) : (
+                                    <Eye
+                                        onClick={() =>
+                                            setIsVisible(
+                                                true,
+                                            )
+                                        }
+                                        size={16}
+                                    />
+                                )}
                             </div>
                         </label>
                     ) : (

@@ -5,6 +5,7 @@ import {
     useState,
     useRef,
     type FormEvent,
+    type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
 } from "react";
 
@@ -102,8 +103,8 @@ interface NewFolderDialogState {
     error: string;
 }
 
-const DEFAULT_DIRECTORY_CACHE_KEY =
-    "__default_remote_directory__";
+const DEFAULT_DIRECTORY_CACHE_KEY = "__default_remote_directory__";
+const TYPE_SELECT_RESET_DELAY_MS = 750;
 
 function getDirectoryCacheKey(
     remotePath?: string,
@@ -348,6 +349,28 @@ function buildBreadcrumbs(
     return breadcrumbs;
 }
 
+function shouldIgnoreTypeSelectTarget(
+    target: EventTarget | null,
+): boolean {
+    if (!(target instanceof Element)) {
+        return false;
+    }
+
+    return Boolean(
+        target.closest(
+            [
+                "input",
+                "textarea",
+                "select",
+                "button",
+                "[contenteditable='true']",
+                "[role='dialog']",
+                "[role='menu']",
+            ].join(","),
+        ),
+    );
+}
+
 export function RemoteFileExplorer({
     connectionId,
     isActive,
@@ -370,6 +393,30 @@ export function RemoteFileExplorer({
 
     const [selectedPath, setSelectedPath] =
         useState<string | null>(null);
+
+    const fileListContainerRef =
+        useRef<HTMLDivElement | null>(
+            null,
+        );
+
+    const fileRowRefs =
+        useRef<
+            Map<
+                string,
+                HTMLTableRowElement
+            >
+        >(
+            new Map(),
+        );
+
+    const typeSelectBufferRef =
+        useRef("");
+
+    const typeSelectTimerRef =
+        useRef<
+            ReturnType<typeof setTimeout> |
+            null
+        >(null);
 
     const [
         contextMenu,
@@ -495,6 +542,246 @@ export function RemoteFileExplorer({
         });
     }, [listing, sortKey, sortDirection]);
 
+    function clearTypeSelectTimer():
+        void {
+        if (
+            !typeSelectTimerRef.current
+        ) {
+            return;
+        }
+
+        clearTimeout(
+            typeSelectTimerRef.current,
+        );
+
+        typeSelectTimerRef.current =
+            null;
+    }
+
+    function resetTypeSelectBuffer():
+        void {
+        clearTypeSelectTimer();
+
+        typeSelectBufferRef.current =
+            "";
+    }
+
+    function scheduleTypeSelectReset():
+        void {
+        clearTypeSelectTimer();
+
+        typeSelectTimerRef.current =
+            setTimeout(() => {
+                typeSelectBufferRef.current =
+                    "";
+
+                typeSelectTimerRef.current =
+                    null;
+            }, TYPE_SELECT_RESET_DELAY_MS);
+    }
+
+    function selectAndRevealEntry(
+        entry: RemoteFileEntry,
+    ): void {
+        setSelectedPath(
+            entry.path,
+        );
+
+        window.requestAnimationFrame(
+            () => {
+                fileRowRefs.current
+                    .get(entry.path)
+                    ?.scrollIntoView({
+                        block: "nearest",
+                        inline: "nearest",
+                    });
+            },
+        );
+    }
+
+    function findNextEntryStartingWith(
+        searchText: string,
+        cycleFromCurrent:
+            boolean,
+    ): RemoteFileEntry | null {
+        const normalizedSearchText =
+            searchText.toLocaleLowerCase();
+
+        const matchingEntries =
+            sortedEntries.filter(
+                (entry) =>
+                    entry.name
+                        .toLocaleLowerCase()
+                        .startsWith(
+                            normalizedSearchText,
+                        ),
+            );
+
+        if (
+            matchingEntries.length === 0
+        ) {
+            return null;
+        }
+
+        if (!cycleFromCurrent) {
+            return (
+                matchingEntries[0] ??
+                null
+            );
+        }
+
+        const currentMatchIndex =
+            matchingEntries.findIndex(
+                (entry) =>
+                    entry.path ===
+                    selectedPath,
+            );
+
+        if (currentMatchIndex < 0) {
+            return (
+                matchingEntries[0] ??
+                null
+            );
+        }
+
+        return (
+            matchingEntries[
+            (
+                currentMatchIndex +
+                1
+            ) %
+            matchingEntries.length
+            ] ??
+            null
+        );
+    }
+
+    function handleFileListKeyDown(
+        event:
+            ReactKeyboardEvent<HTMLDivElement>,
+    ): void {
+        if (
+            event.defaultPrevented ||
+            event.nativeEvent.isComposing ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.altKey
+        ) {
+            return;
+        }
+
+        /*
+         * Ignore keyboard input coming from controls
+         * inside the list, such as sorting buttons.
+         */
+        if (
+            event.target !==
+            event.currentTarget &&
+            shouldIgnoreTypeSelectTarget(
+                event.target,
+            )
+        ) {
+            return;
+        }
+
+        if (event.key === "Enter") {
+            const selectedEntry =
+                sortedEntries.find(
+                    (entry) =>
+                        entry.path ===
+                        selectedPath,
+                );
+
+            if (!selectedEntry) {
+                return;
+            }
+
+            event.preventDefault();
+
+            resetTypeSelectBuffer();
+
+            handleEntryOpen(
+                selectedEntry,
+            );
+
+            return;
+        }
+
+        if (
+            event.key.length !== 1 ||
+            /\s/u.test(event.key)
+        ) {
+            return;
+        }
+
+        const typedCharacter =
+            event.key.toLocaleLowerCase();
+
+        const previousBuffer =
+            typeSelectBufferRef.current;
+
+        /*
+         * Repeatedly pressing the same character
+         * cycles through all matching entries:
+         *
+         * a → first A item
+         * a → second A item
+         * a → third A item
+         */
+        const shouldCycle =
+            previousBuffer.length === 1 &&
+            previousBuffer ===
+            typedCharacter;
+
+        let nextBuffer =
+            shouldCycle
+                ? typedCharacter
+                : previousBuffer +
+                typedCharacter;
+
+        let matchingEntry =
+            findNextEntryStartingWith(
+                nextBuffer,
+                shouldCycle,
+            );
+
+        /*
+         * When the accumulated text has no match,
+         * start a new search from the latest key.
+         *
+         * Example:
+         *   typed "ab", no match
+         *   "b" may still match backup.txt
+         */
+        if (
+            !matchingEntry &&
+            nextBuffer.length > 1
+        ) {
+            nextBuffer =
+                typedCharacter;
+
+            matchingEntry =
+                findNextEntryStartingWith(
+                    nextBuffer,
+                    false,
+                );
+        }
+
+        typeSelectBufferRef.current =
+            nextBuffer;
+
+        scheduleTypeSelectReset();
+
+        if (!matchingEntry) {
+            return;
+        }
+
+        event.preventDefault();
+
+        selectAndRevealEntry(
+            matchingEntry,
+        );
+    }
 
     function showToast(
         message: string,
@@ -513,6 +800,20 @@ export function RemoteFileExplorer({
                 toastTimerRef.current = null;
             }, 2_500);
     }
+
+    useEffect(() => {
+        resetTypeSelectBuffer();
+    }, [
+        listing?.path,
+    ]);
+
+    useEffect(() => {
+        return () => {
+            clearTypeSelectTimer();
+
+            fileRowRefs.current.clear();
+        };
+    }, []);
 
     useEffect(() => {
         return () => {
@@ -1979,7 +2280,14 @@ export function RemoteFileExplorer({
             )}
 
             <div
+                ref={fileListContainerRef}
                 className="file-list-container"
+                tabIndex={0}
+                role="region"
+                aria-label="Remote files and folders"
+                onKeyDown={
+                    handleFileListKeyDown
+                }
                 onContextMenu={(event) =>
                     handleContextMenuOpen(
                         event,
@@ -2036,17 +2344,33 @@ export function RemoteFileExplorer({
                                 (entry) => (
                                     <tr
                                         key={entry.path}
+                                        ref={(element) => {
+                                            if (element) {
+                                                fileRowRefs.current.set(
+                                                    entry.path,
+                                                    element,
+                                                );
+                                            } else {
+                                                fileRowRefs.current.delete(
+                                                    entry.path,
+                                                );
+                                            }
+                                        }}
                                         className={
                                             selectedPath ===
                                                 entry.path
                                                 ? "file-row file-row--selected"
                                                 : "file-row"
                                         }
-                                        onClick={() =>
+                                        onClick={() => {
                                             setSelectedPath(
                                                 entry.path,
-                                            )
-                                        }
+                                            );
+
+                                            fileListContainerRef.current?.focus({
+                                                preventScroll: true,
+                                            });
+                                        }}
                                         onDoubleClick={() =>
                                             handleEntryOpen(entry)
                                         }

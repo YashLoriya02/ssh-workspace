@@ -3276,3 +3276,361 @@ h1 {
   gap: 6px;
   padding: 6px 10px;
 }
+
+/* =========================================================
+   Resizable terminal / SFTP workspace panes
+   ========================================================= */
+
+.workspace-grid--resizable {
+  gap: 0;
+  column-gap: 0;
+}
+
+.workspace-pane-splitter {
+  position: relative;
+  z-index: 3;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+
+  padding: 0;
+
+  outline: none;
+
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.workspace-pane-splitter__line {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+
+  width: 1px;
+
+  border-radius: 999px;
+
+  background: #303846;
+
+  transform: translateX(-50%);
+
+  transition:
+    width 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.workspace-pane-splitter__handle {
+  position: relative;
+  z-index: 1;
+
+  display: grid;
+
+  width: 8px;
+  height: 36px;
+
+  place-content: center;
+  gap: 3px;
+
+  border: 1px solid transparent;
+  border-radius: 999px;
+
+  background: #151a21;
+
+  opacity: 0;
+
+  transition:
+    opacity 120ms ease,
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.workspace-pane-splitter__handle i {
+  display: block;
+
+  width: 2px;
+  height: 2px;
+
+  border-radius: 50%;
+
+  background: #8794a7;
+}
+
+.workspace-pane-splitter:hover .workspace-pane-splitter__line,
+.workspace-pane-splitter:focus-visible .workspace-pane-splitter__line,
+.workspace-grid--resizing .workspace-pane-splitter__line {
+  width: 2px;
+
+  background: #6688c7;
+
+  box-shadow:
+    0 0 10px rgba(102, 136, 199, 0.55);
+}
+
+.workspace-pane-splitter:hover .workspace-pane-splitter__handle,
+.workspace-pane-splitter:focus-visible .workspace-pane-splitter__handle,
+.workspace-grid--resizing .workspace-pane-splitter__handle {
+  border-color: #405477;
+
+  background: #202b3d;
+
+  opacity: 1;
+}
+
+.workspace-pane-splitter:focus-visible {
+  border-radius: 6px;
+
+  box-shadow:
+    inset 0 0 0 1px #6688c7;
+}
+
+body.workspace-pane-resizing,
+body.workspace-pane-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/*
+ * On narrow windows, retain the existing stacked layout.
+ * The inline desktop column sizes must be overridden with
+ * !important here.
+ */
+@media (max-width: 1050px) {
+  .workspace-grid--resizable {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+
+    gap: 16px;
+  }
+
+  .workspace-pane-splitter {
+    display: none;
+  }
+}
+
+
+/* =========================================================
+   Native saved SSH password status
+   ========================================================= */
+
+.password-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  gap: 12px;
+}
+
+.credential-status {
+  display: inline-flex;
+  align-items: center;
+
+  min-width: 0;
+  gap: 5px;
+
+  color: #8a95a5;
+
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.credential-status--saved {
+  color: #72d994;
+}
+
+.credential-status--saved svg {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 560px) {
+  .password-label {
+    align-items: flex-start;
+    flex-direction: column;
+
+    gap: 4px;
+  }
+}
+
+/* =========================================================
+   Remote file-list keyboard focus and type-to-select
+   ========================================================= */
+
+.file-list-container {
+  outline: none;
+}
+
+.file-list-container:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px rgba(102, 136, 199, 0.78);
+}
+
+.file-list-container:focus-visible::after {
+  position: sticky;
+  right: 8px;
+  bottom: 8px;
+
+  display: block;
+
+  width: max-content;
+  margin:
+    -25px 8px 8px auto;
+  padding: 4px 7px;
+
+  border: 1px solid #3e4f6b;
+  border-radius: 6px;
+
+  color: #8190a6;
+  background: rgba(20,
+      26,
+      35,
+      0.92);
+
+  font-size: 9px;
+
+  content:
+    "Type to select";
+
+  pointer-events: none;
+}
+
+/* =========================================================
+   Terminal Ctrl/Cmd+F search
+   ========================================================= */
+
+.terminal-search-button--active {
+  border-color: #5873a5;
+
+  color: #d6e2ff;
+  background: #283a57;
+}
+
+.terminal-search-button--active:hover:not(:disabled) {
+  border-color: #718fc5;
+
+  background: #304767;
+}
+
+.terminal-search-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  min-width: 0;
+  min-height: 42px;
+
+  gap: 7px;
+  padding: 6px 9px;
+
+  border-bottom: 1px solid #29313e;
+
+  background: #151a21;
+}
+
+.terminal-search-bar__icon {
+  flex: 0 0 auto;
+
+  color: #77869a;
+}
+
+.terminal-search-bar input {
+  flex: 1 1 auto;
+
+  width: auto;
+  min-width: 80px;
+  height: 29px;
+
+  padding: 5px 9px;
+
+  border-color: #394555;
+  border-radius: 6px;
+
+  color: #dde4ef;
+  background: #0d1117;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 10px;
+}
+
+.terminal-search-bar input:focus {
+  border-color: #6688c7;
+
+  box-shadow:
+    0 0 0 1px rgba(102, 136, 199, 0.23);
+}
+
+.terminal-search-result {
+  flex: 0 0 auto;
+
+  min-width: 62px;
+
+  color: #8d99a9;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.terminal-search-result--empty {
+  color: #e29478;
+}
+
+.terminal-search-control {
+  display: grid;
+  flex: 0 0 28px;
+
+  width: 28px;
+  height: 28px;
+
+  place-items: center;
+
+  padding: 0;
+
+  border-color: #394555;
+  border-radius: 6px;
+
+  color: #9ca8b8;
+  background: #202630;
+}
+
+.terminal-search-control:hover:not(:disabled) {
+  border-color: #526781;
+
+  color: #edf2fa;
+  background: #2a3442;
+}
+
+.terminal-search-close:hover:not(:disabled) {
+  border-color: #704147;
+
+  color: #ffb2b2;
+  background: #382126;
+}
+
+@media (max-width: 650px) {
+  .terminal-search-result {
+    display: none;
+  }
+
+  .terminal-search-bar {
+    gap: 5px;
+    padding:
+      6px;
+  }
+}
