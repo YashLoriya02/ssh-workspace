@@ -1,4 +1,5 @@
 import {
+    FolderOpen,
     Plus,
     Server,
     SquareTerminal,
@@ -10,6 +11,7 @@ import type {
 
 export type AppArea =
     | "connections"
+    | "sftp"
     | "sessions";
 
 interface AppHeaderProps {
@@ -20,6 +22,7 @@ interface AppHeaderProps {
 
     onOpenConnections: () => void;
     onOpenSessions: () => void;
+    onOpenSftp: () => void;
 }
 
 function getBackendLabel(
@@ -48,6 +51,7 @@ export function AppHeader({
     shortcutModifierLabel,
     onOpenConnections,
     onOpenSessions,
+    onOpenSftp,
 }: AppHeaderProps) {
     return (
         <header className="app-header">
@@ -133,6 +137,32 @@ export function AppHeader({
 
                         <span className="app-navigation__count">
                             {activeSessionCount}
+                        </span>
+                    </button>
+
+                    <button
+                        type="button"
+                        className={
+                            currentArea === "sftp"
+                                ? "app-navigation__item app-navigation__item--active"
+                                : "app-navigation__item"
+                        }
+                        aria-current={
+                            currentArea === "sftp"
+                                ? "page"
+                                : undefined
+                        }
+                        onClick={
+                            onOpenSftp
+                        }
+                    >
+                        <FolderOpen
+                            size={15}
+                            aria-hidden="true"
+                        />
+
+                        <span>
+                            SFTP
                         </span>
                     </button>
                 </nav>

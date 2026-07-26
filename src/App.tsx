@@ -41,9 +41,10 @@ import {
 } from "./features/ssh/WorkspacePage";
 
 import "./App.css";
+import { SftpWorkspacePage } from "./features/sftp/SftpWorkspacePage";
 
 interface WorkspaceSession
-  extends ConnectedWorkspaceDetails {}
+  extends ConnectedWorkspaceDetails { }
 
 interface WorkspaceState {
   sessions: WorkspaceSession[];
@@ -52,23 +53,23 @@ interface WorkspaceState {
 
 type WorkspaceAction =
   | {
-      type: "add";
-      session: WorkspaceSession;
-    }
+    type: "add";
+    session: WorkspaceSession;
+  }
   | {
-      type: "select";
-      connectionId: string;
-    }
+    type: "select";
+    connectionId: string;
+  }
   | {
-      type: "remove";
-      connectionId: string;
-    };
+    type: "remove";
+    connectionId: string;
+  };
 
 const initialWorkspaceState:
   WorkspaceState = {
-    sessions: [],
-    activeConnectionId: null,
-  };
+  sessions: [],
+  activeConnectionId: null,
+};
 
 function workspaceReducer(
   state: WorkspaceState,
@@ -246,10 +247,16 @@ function AppRoutes() {
     location.pathname ===
     "/workspace";
 
+  const isSftpRoute =
+    location.pathname ===
+    "/sftp";
+
   const currentArea: AppArea =
-    isSessionsRoute
-      ? "sessions"
-      : "connections";
+    isSftpRoute
+      ? "sftp"
+      : isSessionsRoute
+        ? "sessions"
+        : "connections";
 
   useEffect(() => {
     return backendClient.subscribeToState(
@@ -272,6 +279,11 @@ function AppRoutes() {
   const handleOpenSessions =
     useCallback((): void => {
       navigate("/workspace");
+    }, [navigate]);
+
+  const handleOpenSftp =
+    useCallback((): void => {
+      navigate("/sftp");
     }, [navigate]);
 
   const handleConnected =
@@ -604,6 +616,9 @@ function AppRoutes() {
         onOpenSessions={
           handleOpenSessions
         }
+        onOpenSftp={
+          handleOpenSftp
+        }
       />
 
       <div className="app-shell__content">
@@ -622,6 +637,20 @@ function AppRoutes() {
           <Route
             path="/workspace"
             element={<></>}
+          />
+
+          <Route
+            path="/sftp"
+            element={
+              <SftpWorkspacePage
+                servers={
+                  sessions
+                }
+                onDisconnectServer={
+                  handleCloseSession
+                }
+              />
+            }
           />
 
           <Route

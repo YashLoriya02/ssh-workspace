@@ -1231,52 +1231,55 @@ export function SshConnectionTest({
 
                         <label>
                             <span>Authentication</span>
-                            <select
-                                value={authenticationType}
-                                onChange={(event) => {
-                                    const nextAuthenticationType =
-                                        event.target
-                                            .value as AuthenticationType;
 
-                                    cancelSavedPasswordLoad(
-                                        true,
-                                    );
+                            <div className="select-wrapper">
+                                <select
+                                    value={authenticationType}
+                                    onChange={(event) => {
+                                        const nextAuthenticationType =
+                                            event.target
+                                                .value as AuthenticationType;
 
-                                    setAuthenticationType(
-                                        nextAuthenticationType,
-                                    );
+                                        cancelSavedPasswordLoad(
+                                            true,
+                                        );
 
-                                    if (
-                                        nextAuthenticationType ===
-                                        "password" &&
-                                        selectedProfileId
-                                    ) {
-                                        const selectedProfile =
-                                            profiles.find(
-                                                (profile) =>
-                                                    profile.id ===
-                                                    selectedProfileId,
-                                            );
+                                        setAuthenticationType(
+                                            nextAuthenticationType,
+                                        );
 
-                                        if (selectedProfile) {
-                                            void loadSavedPasswordForProfile({
-                                                ...selectedProfile,
+                                        if (
+                                            nextAuthenticationType ===
+                                            "password" &&
+                                            selectedProfileId
+                                        ) {
+                                            const selectedProfile =
+                                                profiles.find(
+                                                    (profile) =>
+                                                        profile.id ===
+                                                        selectedProfileId,
+                                                );
 
-                                                authenticationType:
-                                                    "password",
-                                            });
+                                            if (selectedProfile) {
+                                                void loadSavedPasswordForProfile({
+                                                    ...selectedProfile,
+
+                                                    authenticationType:
+                                                        "password",
+                                                });
+                                            }
                                         }
-                                    }
-                                }}
-                                disabled={Boolean(connectionId)}
-                            >
-                                <option value="password">
-                                    Password
-                                </option>
-                                <option value="privateKey">
-                                    Private key
-                                </option>
-                            </select>
+                                    }}
+                                    disabled={Boolean(connectionId)}
+                                >
+                                    <option value="password">
+                                        Password
+                                    </option>
+                                    <option value="privateKey">
+                                        Private key
+                                    </option>
+                                </select>
+                            </div>
                         </label>
                     </div>
 

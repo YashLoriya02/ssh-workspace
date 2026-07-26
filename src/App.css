@@ -83,6 +83,31 @@ label {
   font-size: 13px;
 }
 
+.select-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.select-wrapper select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+
+  /* Prevent text from overlapping the arrow */
+  padding-right: 40px;
+}
+
+.select-wrapper::after {
+  content: "⌄";
+  position: absolute;
+  right: 12px;
+  /* Increase this to move the arrow further left */
+  top: 33%;
+  transform: translateY(-55%);
+  pointer-events: none;
+  font-size: 18px;
+}
+
 .ssh-page {
   min-height: 100vh;
   padding: 32px;
@@ -3632,5 +3657,1317 @@ body.workspace-pane-resizing * {
     gap: 5px;
     padding:
       6px;
+  }
+}
+
+
+/* =========================================================
+   Dual-pane SFTP workspace
+   ========================================================= */
+
+.sftp-workspace-page {
+  min-height: calc(100vh - var(--app-header-height));
+  padding: 18px;
+}
+
+.sftp-workspace-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  width: min(1700px, 100%);
+  min-height: 70px;
+
+  gap: 20px;
+  margin: 0 auto 14px;
+  padding: 12px 15px;
+
+  border: 1px solid #29313e;
+  border-radius: 12px;
+
+  background:
+    rgba(20, 23, 30, 0.96);
+
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.2);
+}
+
+.sftp-workspace-topbar__title {
+  display: flex;
+  align-items: center;
+
+  min-width: 0;
+  gap: 12px;
+}
+
+.sftp-workspace-topbar__icon {
+  display: grid;
+  flex: 0 0 auto;
+
+  width: 39px;
+  height: 39px;
+
+  place-items: center;
+
+  border: 1px solid #3a527d;
+  border-radius: 10px;
+
+  color: #b8caff;
+  background: #21304a;
+}
+
+.sftp-workspace-topbar h1 {
+  margin: 0;
+
+  font-size: 17px;
+}
+
+.sftp-workspace-topbar p {
+  margin: 4px 0 0;
+
+  color: #7f8998;
+
+  font-size: 11px;
+}
+
+.sftp-swap-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  min-height: 34px;
+  gap: 7px;
+  padding: 0 11px;
+
+  border-color: #3c4e6d;
+
+  color: #b7c7e9;
+  background: #1b273a;
+
+  font-size: 10px;
+}
+
+.sftp-swap-button:hover:not(:disabled) {
+  border-color: #607eaf;
+
+  color: #ffffff;
+  background: #253753;
+}
+
+.sftp-workspace-error {
+  width: min(1700px, 100%);
+
+  margin: 0 auto 12px;
+  padding: 9px 12px;
+
+  border: 1px solid #67383e;
+  border-radius: 8px;
+
+  color: #ffabab;
+  background: #2b191c;
+
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.sftp-dual-pane-grid {
+  display: grid;
+  align-items: stretch;
+
+  width: min(1700px, 100%);
+  height:
+    calc(100dvh - var(--app-header-height) - 120px);
+
+  min-height: 560px;
+
+  margin: 0 auto;
+}
+
+.sftp-pane {
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+
+  overflow: hidden;
+
+  border: 1px solid #2c3542;
+  border-radius: 13px;
+
+  color: #d7dde7;
+  background: #11151c;
+
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.27);
+}
+
+.sftp-pane__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  min-height: 58px;
+
+  gap: 12px;
+  padding: 8px 10px 8px 13px;
+
+  border-bottom: 1px solid #282f39;
+
+  background:
+    linear-gradient(180deg,
+      #1a1f27,
+      #161a21);
+}
+
+.sftp-pane__source {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+
+  gap: 9px;
+}
+
+.sftp-pane__source-icon {
+  display: grid;
+  flex: 0 0 auto;
+
+  width: 31px;
+  height: 31px;
+
+  place-items: center;
+
+  border: 1px solid #364150;
+  border-radius: 8px;
+
+  color: #9eb2d8;
+  background: #222a35;
+}
+
+.sftp-pane--local .sftp-pane__source-icon {
+  color: #b7d4ff;
+  background: #1e2b40;
+}
+
+.sftp-pane--remote .sftp-pane__source-icon {
+  color: #94e2ad;
+  background: #1b3023;
+}
+
+.sftp-pane__source-text {
+  display: grid;
+
+  min-width: 0;
+  gap: 3px;
+}
+
+.sftp-pane__source-text strong,
+.sftp-pane__source-text span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-pane__source-text strong {
+  color: #e0e6ef;
+
+  font-size: 12px;
+}
+
+.sftp-pane__source-text span {
+  color: #778394;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+}
+
+.sftp-pane__header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  gap: 5px;
+}
+
+.sftp-pane__icon-button {
+  display: grid;
+
+  width: 29px;
+  height: 29px;
+
+  place-items: center;
+
+  padding: 0;
+
+  border-color: #35404f;
+  border-radius: 7px;
+
+  color: #8e9aaa;
+  background: #1d232c;
+}
+
+.sftp-pane__icon-button:hover:not(:disabled),
+.sftp-pane__icon-button--active {
+  border-color: #526786;
+
+  color: #edf2fb;
+  background: #293443;
+}
+
+.sftp-pane__icon-button:disabled {
+  opacity: 0.28;
+}
+
+.sftp-pane__menu-root {
+  position: relative;
+}
+
+.sftp-pane__menu {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 7px);
+  right: 0;
+
+  display: grid;
+
+  width: 190px;
+  padding: 5px;
+
+  border: 1px solid #394352;
+  border-radius: 9px;
+
+  background: #181d24;
+
+  box-shadow:
+    0 15px 36px rgba(0, 0, 0, 0.46);
+}
+
+.sftp-pane__menu button {
+  display: flex;
+  align-items: center;
+
+  width: 100%;
+  min-height: 34px;
+
+  gap: 8px;
+  padding: 0 9px;
+
+  border: 0;
+  border-radius: 6px;
+
+  color: #b2bdcc;
+  background: transparent;
+
+  text-align: left;
+  font-size: 10px;
+}
+
+.sftp-pane__menu button:hover:not(:disabled) {
+  color: #ffffff;
+  background: #262e39;
+}
+
+.sftp-pane__menu .sftp-pane__menu-danger {
+  color: #e9a0a0;
+}
+
+.sftp-pane__menu .sftp-pane__menu-danger:hover:not(:disabled) {
+  color: #ffc1c1;
+  background: #382125;
+}
+
+.sftp-pane__selector {
+  flex: 0 0 auto;
+
+  padding: 9px 10px;
+
+  border-bottom: 1px solid #252c35;
+
+  background: #131820;
+}
+
+.sftp-pane__selector label {
+  display: grid;
+  grid-template-columns:
+    auto minmax(0, 1fr);
+
+  align-items: center;
+
+  gap: 9px;
+}
+
+.sftp-pane__selector label>span {
+  color: #6f7c8d;
+
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sftp-pane__selector select {
+  height: 32px;
+
+  padding: 4px 9px;
+
+  border-radius: 7px;
+
+  color: #cdd5e1;
+  background: #0d1117;
+
+  font-size: 10px;
+}
+
+.sftp-pane__body {
+  position: relative;
+
+  display: flex;
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  overflow: hidden;
+
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.01),
+      transparent 35%),
+    #10141a;
+}
+
+.sftp-pane__empty-state {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 0;
+  min-height: 260px;
+
+  gap: 9px;
+  padding: 30px;
+
+  color: #778293;
+
+  text-align: center;
+}
+
+.sftp-pane__empty-icon {
+  display: grid;
+
+  width: 58px;
+  height: 58px;
+
+  place-items: center;
+
+  margin-bottom: 4px;
+
+  border: 1px solid #333d4a;
+  border-radius: 16px;
+
+  color: #8190a6;
+  background: #1b212a;
+}
+
+.sftp-pane__empty-icon--local {
+  border-color: #354d74;
+
+  color: #a7c5fa;
+  background: #1b283c;
+}
+
+.sftp-pane__empty-icon--remote {
+  border-color: #31543e;
+
+  color: #8bddaa;
+  background: #192c20;
+}
+
+.sftp-pane__empty-state strong {
+  color: #cbd3df;
+
+  font-size: 13px;
+}
+
+.sftp-pane__empty-state p {
+  max-width: 430px;
+
+  margin: 0;
+
+  color: #748091;
+
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.sftp-pane__selected-location {
+  overflow-wrap: anywhere;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+}
+
+.sftp-pane__empty-state small {
+  max-width: 430px;
+
+  color: #596576;
+
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.sftp-pane__primary-action {
+  display: inline-flex;
+  align-items: center;
+
+  min-height: 34px;
+
+  gap: 7px;
+  margin-top: 5px;
+  padding: 0 12px;
+
+  border-color: #415d8c;
+
+  color: #c7d7fa;
+  background: #20314b;
+
+  font-size: 10px;
+}
+
+.sftp-pane__primary-action:hover:not(:disabled) {
+  border-color: #6485bd;
+
+  color: #ffffff;
+  background: #294263;
+}
+
+.sftp-pane__connected-badge {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 6px;
+  padding: 5px 9px;
+
+  border: 1px solid #31523d;
+  border-radius: 999px;
+
+  color: #86dca2;
+  background: #182a1f;
+
+  font-size: 9px;
+}
+
+.sftp-pane__connected-badge i {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+
+  background: #75df98;
+
+  box-shadow:
+    0 0 7px rgba(117, 223, 152, 0.6);
+}
+
+.sftp-pane__footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  min-height: 30px;
+
+  gap: 12px;
+  padding: 0 10px;
+
+  border-top: 1px solid #252c35;
+
+  color: #687486;
+  background: #141920;
+
+  font-size: 9px;
+}
+
+.sftp-pane__footer span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1050px) {
+  .sftp-dual-pane-grid {
+    height: auto;
+  }
+
+  .sftp-pane {
+    height: 500px;
+  }
+}
+
+@media (max-width: 650px) {
+  .sftp-workspace-page {
+    padding: 10px;
+  }
+
+  .sftp-workspace-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sftp-swap-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .sftp-pane__source-text span {
+    max-width: 190px;
+  }
+}
+
+/* =========================================================
+   Dual-pane local filesystem browser
+   ========================================================= */
+
+.local-file-browser {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.local-file-browser__toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  min-width: 0;
+  min-height: 42px;
+
+  gap: 7px;
+  padding: 6px 8px;
+
+  border-bottom: 1px solid #252c35;
+
+  background: #141920;
+}
+
+.local-current-path {
+  flex: 1 1 auto;
+
+  min-width: 60px;
+  height: 29px;
+
+  overflow: hidden;
+
+  padding: 7px 9px;
+
+  border: 1px solid #313b49;
+  border-radius: 6px;
+
+  color: #aeb9ca;
+  background: #0d1117;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-create-folder-button,
+.local-change-root-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  height: 29px;
+
+  gap: 6px;
+  padding: 0 9px;
+
+  border-color: #374354;
+  border-radius: 6px;
+
+  color: #9eabba;
+  background: #1d242e;
+
+  font-size: 9px;
+}
+
+.local-create-folder-button:hover:not(:disabled),
+.local-change-root-button:hover:not(:disabled) {
+  border-color: #536984;
+
+  color: #edf2fa;
+  background: #293442;
+}
+
+.local-breadcrumbs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  min-height: 32px;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  padding: 0 8px;
+
+  border-bottom: 1px solid #242b34;
+
+  background: #11161d;
+
+  white-space: nowrap;
+}
+
+.local-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+}
+
+.local-breadcrumb button {
+  border: 0;
+
+  padding: 3px 5px;
+
+  color: #91a5c9;
+  background: transparent;
+
+  font-size: 9px;
+}
+
+.local-breadcrumb button:hover:not(:disabled) {
+  color: #e4ebfa;
+  background: #242c37;
+}
+
+.local-breadcrumb__separator {
+  color: #4f5b6c;
+
+  font-size: 9px;
+}
+
+.local-file-browser__error {
+  flex: 0 0 auto;
+
+  max-height: 72px;
+
+  overflow-y: auto;
+
+  margin: 7px;
+  padding: 8px 9px;
+
+  border: 1px solid #63373c;
+  border-radius: 7px;
+
+  color: #ffabab;
+  background: #29181b;
+
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.local-file-list-container {
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  overflow: auto;
+
+  outline: none;
+}
+
+.local-file-list-container:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px rgba(102, 136, 199, 0.75);
+}
+
+.local-file-list {
+  width: 100%;
+
+  border-collapse: collapse;
+
+  table-layout: fixed;
+
+  font-size: 10px;
+}
+
+.local-file-list th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+
+  height: 32px;
+  padding: 0 8px;
+
+  border-bottom: 1px solid #2a323e;
+
+  color: #758193;
+  background: #161b22;
+
+  text-align: left;
+  font-weight: 600;
+}
+
+.local-file-list th:first-child {
+  width: 52%;
+}
+
+.local-file-list th:nth-child(2) {
+  width: 16%;
+}
+
+.local-file-list th:nth-child(3) {
+  width: 32%;
+}
+
+.local-sort-button {
+  display: inline-flex;
+  align-items: center;
+
+  width: auto;
+  height: 28px;
+
+  gap: 5px;
+  padding: 0;
+
+  border: 0;
+
+  color: inherit;
+  background: transparent;
+
+  font-size: inherit;
+}
+
+.local-sort-button:hover:not(:disabled) {
+  color: #cbd5e6;
+  background: transparent;
+}
+
+.local-file-list td {
+  height: 31px;
+
+  overflow: hidden;
+
+  padding: 4px 8px;
+
+  border-bottom: 1px solid #202730;
+
+  color: #929eae;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-file-list td:first-child {
+  display: flex;
+  align-items: center;
+
+  min-width: 0;
+
+  gap: 7px;
+}
+
+.local-file-row {
+  cursor: default;
+}
+
+.local-file-row:hover {
+  background: #19212b;
+}
+
+.local-file-row--selected {
+  background: #243043;
+}
+
+.local-file-row--selected:hover {
+  background: #29374b;
+}
+
+.local-file-entry-icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+
+  width: 18px;
+  height: 18px;
+
+  place-items: center;
+
+  color: #8996a8;
+}
+
+.local-file-entry-icon--directory {
+  color: #e2bc69;
+}
+
+.local-file-entry-icon--file {
+  color: #95acd3;
+}
+
+.local-file-entry-icon--symlink {
+  color: #a68bd8;
+}
+
+.local-file-entry-name {
+  overflow: hidden;
+
+  color: #d1d8e3;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-file-browser__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 220px;
+
+  gap: 9px;
+  padding: 25px;
+
+  color: #707d8f;
+
+  font-size: 11px;
+}
+
+.local-file-browser__status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  min-height: 28px;
+
+  gap: 12px;
+  padding: 0 9px;
+
+  border-top: 1px solid #252c35;
+
+  color: #647184;
+  background: #13181f;
+
+  font-size: 8px;
+}
+
+.local-file-browser__status span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .local-create-folder-button span {
+    display: none;
+  }
+
+  .local-change-root-button {
+    display: none;
+  }
+
+  .local-file-list th:nth-child(2),
+  .local-file-list td:nth-child(2) {
+    display: none;
+  }
+
+  .local-file-list th:first-child {
+    width: 62%;
+  }
+
+  .local-file-list th:nth-child(3) {
+    width: 38%;
+  }
+}
+
+/* =========================================================
+   Dual-pane remote SFTP browser
+   ========================================================= */
+
+.sftp-remote-browser {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sftp-remote-browser__toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  min-width: 0;
+  min-height: 42px;
+
+  gap: 7px;
+  padding: 6px 8px;
+
+  border-bottom: 1px solid #252c35;
+
+  background: #141920;
+}
+
+.sftp-remote-path-form {
+  flex: 1 1 auto;
+
+  min-width: 60px;
+}
+
+.sftp-remote-path-form input {
+  height: 29px;
+
+  padding: 5px 9px;
+
+  border-radius: 6px;
+
+  color: #aeb9ca;
+  background: #0d1117;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+}
+
+.remote-create-folder-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  height: 29px;
+
+  gap: 6px;
+  padding: 0 9px;
+
+  border-color: #374354;
+  border-radius: 6px;
+
+  color: #9eabba;
+  background: #1d242e;
+
+  font-size: 9px;
+}
+
+.remote-create-folder-button:hover:not(:disabled) {
+  border-color: #536984;
+
+  color: #edf2fa;
+  background: #293442;
+}
+
+.sftp-remote-breadcrumbs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+
+  min-height: 32px;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  padding: 0 8px;
+
+  border-bottom: 1px solid #242b34;
+
+  background: #11161d;
+
+  white-space: nowrap;
+}
+
+.sftp-remote-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sftp-remote-breadcrumb button {
+  border: 0;
+
+  padding: 3px 5px;
+
+  color: #91a5c9;
+  background: transparent;
+
+  font-size: 9px;
+}
+
+.sftp-remote-breadcrumb button:hover:not(:disabled) {
+  color: #e4ebfa;
+  background: #242c37;
+}
+
+.sftp-remote-breadcrumb__separator {
+  color: #4f5b6c;
+
+  font-size: 9px;
+}
+
+.sftp-remote-browser__error {
+  flex: 0 0 auto;
+
+  max-height: 72px;
+
+  overflow-y: auto;
+
+  margin: 7px;
+  padding: 8px 9px;
+
+  border: 1px solid #63373c;
+  border-radius: 7px;
+
+  color: #ffabab;
+  background: #29181b;
+
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.sftp-remote-list-container {
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  overflow: auto;
+
+  outline: none;
+}
+
+.sftp-remote-list-container:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px rgba(102, 136, 199, 0.75);
+}
+
+.sftp-remote-file-list {
+  width: 100%;
+
+  border-collapse: collapse;
+
+  table-layout: fixed;
+
+  font-size: 10px;
+}
+
+.sftp-remote-file-list th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+
+  height: 32px;
+  padding: 0 8px;
+
+  border-bottom: 1px solid #2a323e;
+
+  color: #758193;
+  background: #161b22;
+
+  text-align: left;
+  font-weight: 600;
+}
+
+.sftp-remote-file-list th:first-child {
+  width: 46%;
+}
+
+.sftp-remote-file-list th:nth-child(2) {
+  width: 14%;
+}
+
+.sftp-remote-file-list th:nth-child(3) {
+  width: 25%;
+}
+
+.sftp-remote-file-list th:nth-child(4) {
+  width: 15%;
+}
+
+.sftp-remote-sort-button {
+  display: inline-flex;
+  align-items: center;
+
+  width: auto;
+  height: 28px;
+
+  gap: 5px;
+  padding: 0;
+
+  border: 0;
+
+  color: inherit;
+  background: transparent;
+
+  font-size: inherit;
+}
+
+.sftp-remote-sort-button:hover:not(:disabled) {
+  color: #cbd5e6;
+  background: transparent;
+}
+
+.sftp-remote-file-list td {
+  height: 31px;
+
+  overflow: hidden;
+
+  padding: 4px 8px;
+
+  border-bottom: 1px solid #202730;
+
+  color: #929eae;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-remote-file-list td:first-child {
+  display: flex;
+  align-items: center;
+
+  min-width: 0;
+
+  gap: 7px;
+}
+
+.sftp-remote-file-row {
+  cursor: default;
+}
+
+.sftp-remote-file-row:hover {
+  background: #19212b;
+}
+
+.sftp-remote-file-row--selected {
+  background: #243043;
+}
+
+.sftp-remote-file-row--selected:hover {
+  background: #29374b;
+}
+
+.sftp-remote-entry-icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+
+  width: 18px;
+  height: 18px;
+
+  place-items: center;
+
+  color: #8996a8;
+}
+
+.sftp-remote-entry-icon--directory {
+  color: #e2bc69;
+}
+
+.sftp-remote-entry-icon--file {
+  color: #95acd3;
+}
+
+.sftp-remote-entry-icon--symlink {
+  color: #a68bd8;
+}
+
+.sftp-remote-entry-name {
+  overflow: hidden;
+
+  color: #d1d8e3;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-remote-browser__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 220px;
+
+  gap: 9px;
+  padding: 25px;
+
+  color: #707d8f;
+
+  font-size: 11px;
+}
+
+.sftp-remote-browser__status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  min-height: 28px;
+
+  gap: 12px;
+  padding: 0 9px;
+
+  border-top: 1px solid #252c35;
+
+  color: #647184;
+  background: #13181f;
+
+  font-size: 8px;
+}
+
+.sftp-remote-browser__status span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .remote-create-folder-button span {
+    display: none;
+  }
+
+  .sftp-remote-file-list th:nth-child(4),
+  .sftp-remote-file-list td:nth-child(4) {
+    display: none;
+  }
+
+  .sftp-remote-file-list th:first-child {
+    width: 52%;
+  }
+
+  .sftp-remote-file-list th:nth-child(2) {
+    width: 16%;
+  }
+
+  .sftp-remote-file-list th:nth-child(3) {
+    width: 32%;
   }
 }
