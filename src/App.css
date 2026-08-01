@@ -4971,3 +4971,913 @@ body.workspace-pane-resizing * {
     width: 32%;
   }
 }
+
+/* =========================================================
+   SSH connection and disconnection journey
+   ========================================================= */
+
+.ssh-journey {
+  --ssh-journey-accent: #7396ff;
+  --ssh-journey-soft: rgba(115, 150, 255, 0.17);
+  --ssh-journey-border: rgba(115, 150, 255, 0.38);
+
+  position: relative;
+
+  display: grid;
+
+  min-width: 0;
+  gap: 15px;
+  padding: 17px 18px;
+
+  overflow: hidden;
+
+  border: 1px solid var(--ssh-journey-border);
+  border-radius: 12px;
+
+  background:
+    radial-gradient(circle at 15% 0,
+      var(--ssh-journey-soft),
+      transparent 35%),
+    linear-gradient(180deg,
+      rgba(20, 27, 39, 0.98),
+      rgba(13, 18, 27, 0.98));
+
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+
+  animation:
+    sshJourneyAppear 260ms ease-out both;
+}
+
+.ssh-journey::before {
+  position: absolute;
+  top: 0;
+  left: 12%;
+
+  width: 76%;
+  height: 1px;
+
+  background:
+    linear-gradient(90deg,
+      transparent,
+      var(--ssh-journey-accent),
+      transparent);
+
+  opacity: 0.6;
+
+  content: "";
+}
+
+.ssh-journey--verifying-host {
+  --ssh-journey-accent: #e6b85c;
+  --ssh-journey-soft: rgba(230, 184, 92, 0.15);
+  --ssh-journey-border: rgba(230, 184, 92, 0.38);
+}
+
+.ssh-journey--connected {
+  --ssh-journey-accent: #69d995;
+  --ssh-journey-soft: rgba(105, 217, 149, 0.15);
+  --ssh-journey-border: rgba(105, 217, 149, 0.4);
+}
+
+.ssh-journey--failed,
+.ssh-journey--cancelled {
+  --ssh-journey-accent: #ed797f;
+  --ssh-journey-soft: rgba(237, 121, 127, 0.14);
+  --ssh-journey-border: rgba(237, 121, 127, 0.38);
+}
+
+.ssh-journey--disconnecting,
+.ssh-journey--disconnected {
+  --ssh-journey-accent: #9caac2;
+  --ssh-journey-soft: rgba(156, 170, 194, 0.13);
+  --ssh-journey-border: rgba(156, 170, 194, 0.34);
+}
+
+.ssh-journey__endpoints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  gap: 28px;
+}
+
+.ssh-journey__endpoint {
+  display: flex;
+  align-items: center;
+
+  min-width: 0;
+  max-width: 45%;
+  gap: 9px;
+}
+
+.ssh-journey__endpoint--remote {
+  justify-content: flex-end;
+
+  text-align: right;
+}
+
+.ssh-journey__endpoint-icon {
+  display: grid;
+  flex: 0 0 auto;
+
+  width: 36px;
+  height: 36px;
+
+  place-items: center;
+
+  border: 1px solid var(--ssh-journey-border);
+  border-radius: 10px;
+
+  color: var(--ssh-journey-accent);
+  background: var(--ssh-journey-soft);
+
+  box-shadow:
+    0 0 18px var(--ssh-journey-soft);
+
+  transition:
+    color 280ms ease,
+    border-color 280ms ease,
+    background 280ms ease,
+    transform 280ms ease;
+}
+
+.ssh-journey--connected .ssh-journey__endpoint-icon {
+  transform: translateY(-1px);
+}
+
+.ssh-journey--failed .ssh-journey__endpoint--remote .ssh-journey__endpoint-icon {
+  animation:
+    sshJourneyEndpointShake 380ms ease-in-out;
+}
+
+.ssh-journey__endpoint-copy {
+  display: grid;
+
+  min-width: 0;
+  gap: 3px;
+}
+
+.ssh-journey__endpoint-copy strong,
+.ssh-journey__endpoint-copy small {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-journey__endpoint-copy strong {
+  color: #e2e8f2;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ssh-journey__endpoint-copy small {
+  color: #718097;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 8px;
+}
+
+.ssh-journey__route {
+  position: relative;
+
+  height: 20px;
+
+  margin: -2px 17px 0;
+}
+
+.ssh-journey__route-base,
+.ssh-journey__route-progress {
+  position: absolute;
+  top: 50%;
+  left: 0;
+
+  height: 2px;
+
+  border-radius: 999px;
+
+  transform: translateY(-50%);
+}
+
+.ssh-journey__route-base {
+  width: 100%;
+
+  background: #303a49;
+}
+
+.ssh-journey__route-progress {
+  background:
+    linear-gradient(90deg,
+      rgba(115, 150, 255, 0.55),
+      var(--ssh-journey-accent));
+
+  box-shadow:
+    0 0 11px var(--ssh-journey-accent);
+
+  transition:
+    width 720ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 280ms ease;
+}
+
+.ssh-journey__route-node {
+  position: absolute;
+  top: 50%;
+
+  width: 8px;
+  height: 8px;
+
+  border: 2px solid #69768a;
+  border-radius: 50%;
+
+  background: #121823;
+
+  transform: translateY(-50%);
+
+  transition:
+    border-color 280ms ease,
+    background 280ms ease,
+    box-shadow 280ms ease;
+}
+
+.ssh-journey__route-node--start {
+  left: -3px;
+
+  border-color: var(--ssh-journey-accent);
+  background: var(--ssh-journey-accent);
+
+  box-shadow:
+    0 0 9px var(--ssh-journey-accent);
+}
+
+.ssh-journey__route-node--end {
+  right: -3px;
+}
+
+.ssh-journey--connected .ssh-journey__route-node--end {
+  border-color: var(--ssh-journey-accent);
+  background: var(--ssh-journey-accent);
+
+  box-shadow:
+    0 0 10px var(--ssh-journey-accent);
+}
+
+.ssh-journey--failed .ssh-journey__route-progress,
+.ssh-journey--cancelled .ssh-journey__route-progress {
+  background:
+    repeating-linear-gradient(90deg,
+      var(--ssh-journey-accent) 0 8px,
+      transparent 8px 13px);
+
+  box-shadow: none;
+}
+
+.ssh-journey__packet {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+
+  width: 12px;
+  height: 12px;
+
+  border: 2px solid rgba(255, 255, 255, 0.84);
+  border-radius: 50%;
+
+  background: var(--ssh-journey-accent);
+
+  box-shadow:
+    0 0 8px var(--ssh-journey-accent),
+    0 0 20px var(--ssh-journey-accent);
+
+  transform:
+    translate(-50%, -50%);
+
+  transition:
+    left 720ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 280ms ease;
+}
+
+.ssh-journey__packet::after {
+  position: absolute;
+  inset: -7px;
+
+  border: 1px solid var(--ssh-journey-accent);
+  border-radius: 50%;
+
+  content: "";
+
+  animation:
+    sshJourneyPacketPulse 1.15s ease-out infinite;
+}
+
+.ssh-journey__packet i {
+  position: absolute;
+  top: 50%;
+  left: -14px;
+
+  width: 11px;
+  height: 2px;
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(90deg,
+      transparent,
+      var(--ssh-journey-accent));
+
+  transform: translateY(-50%);
+}
+
+.ssh-journey__status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 0;
+  gap: 9px;
+
+  text-align: center;
+}
+
+.ssh-journey__status-icon {
+  display: grid;
+  flex: 0 0 auto;
+
+  width: 25px;
+  height: 25px;
+
+  place-items: center;
+
+  border: 1px solid var(--ssh-journey-border);
+  border-radius: 50%;
+
+  color: var(--ssh-journey-accent);
+  background: var(--ssh-journey-soft);
+}
+
+.ssh-journey__status-spinner {
+  width: 10px;
+  height: 10px;
+
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--ssh-journey-accent);
+  border-radius: 50%;
+
+  animation:
+    sshJourneySpin 850ms linear infinite;
+}
+
+.ssh-journey__status-copy {
+  display: grid;
+
+  min-width: 0;
+  gap: 3px;
+}
+
+.ssh-journey__status-copy strong {
+  overflow: hidden;
+
+  color: #dbe3ef;
+
+  font-size: 10px;
+  font-weight: 650;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-journey__status-copy small {
+  color: #66758c;
+
+  font-size: 8px;
+}
+
+.ssh-journey--connected .ssh-journey__status-copy strong,
+.ssh-journey--connected .ssh-journey__status-icon {
+  color: #79e3a1;
+}
+
+.ssh-journey--failed .ssh-journey__status-copy strong,
+.ssh-journey--failed .ssh-journey__status-icon,
+.ssh-journey--cancelled .ssh-journey__status-copy strong,
+.ssh-journey--cancelled .ssh-journey__status-icon {
+  color: #ff999e;
+}
+
+.ssh-journey--disconnecting .ssh-journey__route-progress {
+  right: 0;
+  left: auto;
+
+  animation:
+    sshJourneyRetract 1.15s ease-in-out both;
+}
+
+.ssh-journey--disconnected .ssh-journey__route-progress {
+  width: 0 !important;
+}
+
+.ssh-journey--disconnected .ssh-journey__route-node--end {
+  border-color: #ed797f;
+  background: #25171b;
+}
+
+.ssh-journey--compact {
+  width: min(560px, 100%);
+  gap: 13px;
+  padding: 18px 20px;
+}
+
+.workspace-disconnection-overlay {
+  position: absolute;
+  z-index: 120;
+  inset: 0;
+
+  display: grid;
+
+  place-items: center;
+
+  padding: 24px;
+
+  background:
+    rgba(8, 12, 18, 0.76);
+
+  backdrop-filter:
+    blur(6px);
+
+  animation:
+    sshJourneyOverlayAppear 180ms ease-out both;
+}
+
+.workspace-page {
+  position: relative;
+}
+
+@keyframes sshJourneyAppear {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sshJourneyOverlayAppear {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sshJourneyPacketPulse {
+  from {
+    opacity: 0.8;
+    transform: scale(0.45);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes sshJourneySpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sshJourneyEndpointShake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-3px);
+  }
+
+  75% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes sshJourneyRetract {
+  from {
+    width: 100%;
+  }
+
+  to {
+    width: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .ssh-journey {
+    padding: 14px;
+  }
+
+  .ssh-journey__endpoints {
+    gap: 14px;
+  }
+
+  .ssh-journey__endpoint {
+    max-width: 48%;
+  }
+
+  .ssh-journey__endpoint-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ssh-journey__endpoint-copy strong {
+    font-size: 10px;
+  }
+
+  .ssh-journey__endpoint-copy small,
+  .ssh-journey__status-copy small {
+    display: none;
+  }
+
+  .ssh-journey__route {
+    margin-right: 14px;
+    margin-left: 14px;
+  }
+
+  .workspace-disconnection-overlay {
+    padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .ssh-journey,
+  .workspace-disconnection-overlay,
+  .ssh-journey__packet::after,
+  .ssh-journey__status-spinner,
+  .ssh-journey--failed .ssh-journey__endpoint--remote .ssh-journey__endpoint-icon,
+  .ssh-journey--disconnecting .ssh-journey__route-progress {
+    animation: none !important;
+  }
+
+  .ssh-journey__route-progress,
+  .ssh-journey__packet,
+  .ssh-journey__endpoint-icon {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.workspace-tab__status--disconnecting {
+  background: #e6b85c;
+
+  box-shadow:
+    0 0 9px rgba(230, 184, 92, 0.72);
+
+  animation:
+    sshJourneyTabDisconnect 760ms ease-in-out infinite alternate;
+}
+
+@keyframes sshJourneyTabDisconnect {
+  from {
+    opacity: 0.45;
+    transform: scale(0.72);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tab__status--disconnecting {
+    animation: none !important;
+  }
+}
+
+/* =========================================================
+   Dedicated SSH connection journey page
+   ========================================================= */
+
+.ssh-journey-page {
+  display: grid;
+
+  min-height:
+    calc(100dvh - var(--app-header-height));
+
+  place-items: center;
+
+  padding: 34px 24px 46px;
+
+  overflow: auto;
+
+  background:
+    radial-gradient(circle at 50% 10%,
+      rgba(85, 116, 194, 0.16),
+      transparent 34%),
+    radial-gradient(circle at 16% 82%,
+      rgba(54, 82, 132, 0.1),
+      transparent 30%),
+    #0e1117;
+}
+
+.ssh-journey-page--connected {
+  background:
+    radial-gradient(circle at 50% 10%,
+      rgba(73, 175, 115, 0.15),
+      transparent 34%),
+    #0e1117;
+}
+
+.ssh-journey-page--failed,
+.ssh-journey-page--cancelled {
+  background:
+    radial-gradient(circle at 50% 10%,
+      rgba(180, 71, 79, 0.13),
+      transparent 34%),
+    #0e1117;
+}
+
+.ssh-journey-page__content {
+  display: grid;
+
+  width: min(850px, 100%);
+  gap: 24px;
+
+  padding: 50px 100px;
+
+  border-radius: 20px;
+
+  /* border: 1px solid #293442; */
+  
+  /* background:
+    linear-gradient(
+      180deg,
+      rgba(20, 25, 34, 0.98),
+      rgba(14, 18, 25, 0.98)
+    ); */
+
+  /* box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035); */
+
+  animation:
+    sshJourneyPageAppear 320ms ease-out both;
+}
+
+.ssh-journey-page__header {
+  display: grid;
+  justify-items: center;
+
+  gap: 10px;
+
+  text-align: center;
+}
+
+.ssh-journey-page__badge {
+  display: inline-flex;
+  align-items: center;
+
+  gap: 7px;
+  padding: 7px 10px;
+
+  border: 1px solid rgba(115, 150, 255, 0.28);
+  border-radius: 999px;
+
+  color: #aabfff;
+  background: rgba(75, 106, 184, 0.12);
+
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.ssh-journey-page--connected .ssh-journey-page__badge {
+  border-color: rgba(105, 217, 149, 0.3);
+
+  color: #86dfa7;
+  background: rgba(57, 139, 88, 0.12);
+}
+
+.ssh-journey-page--failed .ssh-journey-page__badge,
+.ssh-journey-page--cancelled .ssh-journey-page__badge {
+  border-color: rgba(237, 121, 127, 0.3);
+
+  color: #ef9aa0;
+  background: rgba(148, 54, 61, 0.12);
+}
+
+.ssh-journey-page__header h1 {
+  margin: 2px 0 0;
+
+  color: #edf2fb;
+
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.15;
+}
+
+.ssh-journey-page__header p {
+  max-width: 610px;
+
+  margin: 0;
+
+  color: #8490a2;
+
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ssh-journey--page-card {
+  width: 100%;
+
+  gap: 24px;
+  padding: 26px 28px;
+
+  border-radius: 16px;
+}
+
+.ssh-journey--page-card .ssh-journey__endpoint-icon {
+  width: 48px;
+  height: 48px;
+
+  border-radius: 13px;
+}
+
+.ssh-journey--page-card .ssh-journey__endpoint-copy strong {
+  font-size: 13px;
+}
+
+.ssh-journey--page-card .ssh-journey__endpoint-copy small {
+  font-size: 9px;
+}
+
+.ssh-journey--page-card .ssh-journey__route {
+  height: 30px;
+
+  margin: 0 23px;
+}
+
+.ssh-journey--page-card .ssh-journey__route-base,
+.ssh-journey--page-card .ssh-journey__route-progress {
+  height: 3px;
+}
+
+.ssh-journey--page-card .ssh-journey__route-node {
+  width: 10px;
+  height: 10px;
+}
+
+.ssh-journey--page-card .ssh-journey__packet {
+  width: 15px;
+  height: 15px;
+}
+
+.ssh-journey--page-card .ssh-journey__status-row {
+  align-items: flex-start;
+}
+
+.ssh-journey--page-card .ssh-journey__status-copy {
+  max-width: 610px;
+}
+
+.ssh-journey--page-card .ssh-journey__status-copy strong {
+  overflow: visible;
+
+  font-size: 12px;
+  line-height: 1.45;
+
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.ssh-journey--page-card .ssh-journey__status-copy small {
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.ssh-journey-page__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 10px;
+}
+
+.ssh-journey-page__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 150px;
+  min-height: 38px;
+
+  gap: 7px;
+  padding: 0 14px;
+
+  font-size: 11px;
+}
+
+.ssh-journey-page__retry {
+  border-color: #5874ab;
+
+  color: #e2ebff;
+  background: #294166;
+}
+
+.ssh-journey-page__retry:hover:not(:disabled) {
+  border-color: #7898d2;
+
+  background: #34517c;
+}
+
+.ssh-journey-page__back {
+  border-color: #3b4656;
+
+  color: #aeb8c8;
+  background: #202630;
+}
+
+.ssh-journey-page__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  color: #59677b;
+
+  font-size: 9px;
+  text-align: center;
+}
+
+@keyframes sshJourneyPageAppear {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 680px) {
+  .ssh-journey-page {
+    align-items: start;
+
+    padding: 18px 12px 30px;
+  }
+
+  .ssh-journey-page__content {
+    gap: 18px;
+    padding: 22px 14px;
+
+    border-radius: 15px;
+  }
+
+  .ssh-journey--page-card {
+    gap: 18px;
+    padding: 20px 14px;
+  }
+
+  .ssh-journey--page-card .ssh-journey__endpoints {
+    gap: 10px;
+  }
+
+  .ssh-journey--page-card .ssh-journey__endpoint {
+    max-width: 49%;
+  }
+
+  .ssh-journey--page-card .ssh-journey__endpoint-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ssh-journey--page-card .ssh-journey__route {
+    margin: 0 17px;
+  }
+
+  .ssh-journey-page__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ssh-journey-page__actions button {
+    width: 100%;
+  }
+}

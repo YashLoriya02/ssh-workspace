@@ -21,6 +21,11 @@ import {
 import { SavedConnectionsPanel } from "./SavedConnectionsPanel";
 
 import {
+    SshConnectionJourney,
+    type ConnectionJourneyPhase,
+} from "./SshConnectionJourney";
+
+import {
     deleteConnectionProfile,
     loadConnectionProfiles,
     markProfileConnected,
@@ -66,6 +71,23 @@ type SavedPasswordState =
     | "loading"
     | "loaded";
 
+const MIN_CONNECTION_JOURNEY_MS =
+    3_200;
+
+const CONNECTION_SUCCESS_HOLD_MS =
+    650;
+
+function wait(
+    durationMs: number,
+): Promise<void> {
+    return new Promise((resolve) => {
+        window.setTimeout(
+            resolve,
+            durationMs,
+        );
+    });
+}
+
 export function SshConnectionTest({
     onConnected,
 }: SshConnectionTestProps) {
@@ -73,6 +95,18 @@ export function SshConnectionTest({
         useState<BackendState>({
             status: "stopped",
         });
+
+    const [
+        pendingAutoConnectProfileId,
+        setPendingAutoConnectProfileId,
+    ] = useState<string | null>(
+        null,
+    );
+
+    const connectionFormRef =
+        useRef<HTMLFormElement | null>(
+            null,
+        );
 
     const [host, setHost] = useState("");
     const [port, setPort] = useState("22");
@@ -98,6 +132,29 @@ export function SshConnectionTest({
 
     const [isConnecting, setIsConnecting] =
         useState(false);
+
+
+    const [
+        journeyPhase,
+        setJourneyPhase,
+    ] = useState<ConnectionJourneyPhase>(
+        "idle",
+    );
+
+    const [
+        journeyMessage,
+        setJourneyMessage,
+    ] = useState("");
+
+    const [
+        journeyTarget,
+        setJourneyTarget,
+    ] = useState({
+        profileName: "",
+        host: "",
+        port: 22,
+        username: "",
+    });
 
     const [profiles, setProfiles] =
         useState<SavedConnectionProfile[]>([]);
@@ -132,8 +189,153 @@ export function SshConnectionTest({
     const securityErrorRef =
         useRef<string | null>(null);
 
+
+    const journeyPhaseRef =
+        useRef<ConnectionJourneyPhase>(
+            "idle",
+        );
+
+    const journeyStartedAtRef =
+        useRef(0);
+
+    const journeyTimersRef =
+        useRef<number[]>([]);
+
+    const journeyCancelledRef =
+        useRef(false);
+
+    const awaitingHostApprovalRef =
+        useRef(false);
+
     const backendConnected =
         backendState.status === "connected";
+
+    function clearJourneyTimers(): void {
+        for (
+            const timerId of
+            journeyTimersRef.current
+        ) {
+            window.clearTimeout(
+                timerId,
+            );
+        }
+
+        journeyTimersRef.current = [];
+    }
+
+    function updateJourney(
+        phase: ConnectionJourneyPhase,
+        message: string,
+    ): void {
+        journeyPhaseRef.current =
+            phase;
+
+        setJourneyPhase(
+            phase,
+        );
+
+        setJourneyMessage(
+            message,
+        );
+    }
+
+    function resetJourney(): void {
+        clearJourneyTimers();
+
+        journeyCancelledRef.current =
+            false;
+
+        awaitingHostApprovalRef.current =
+            false;
+
+        updateJourney(
+            "idle",
+            "",
+        );
+    }
+
+    function scheduleJourneyPhase(
+        delayMs: number,
+        phase: ConnectionJourneyPhase,
+        message: string,
+    ): void {
+        const timerId =
+            window.setTimeout(
+                () => {
+                    if (
+                        journeyCancelledRef.current ||
+                        awaitingHostApprovalRef.current ||
+                        [
+                            "connected",
+                            "failed",
+                            "cancelled",
+                            "disconnected",
+                        ].includes(
+                            journeyPhaseRef.current,
+                        )
+                    ) {
+                        return;
+                    }
+
+                    updateJourney(
+                        phase,
+                        message,
+                    );
+                },
+                delayMs,
+            );
+
+        journeyTimersRef.current.push(
+            timerId,
+        );
+    }
+
+    function startConnectionJourney(
+        nextTarget: {
+            profileName: string;
+            host: string;
+            port: number;
+            username: string;
+        },
+    ): void {
+        clearJourneyTimers();
+
+        journeyStartedAtRef.current =
+            performance.now();
+
+        journeyCancelledRef.current =
+            false;
+
+        awaitingHostApprovalRef.current =
+            false;
+
+        setJourneyTarget(
+            nextTarget,
+        );
+
+        updateJourney(
+            "preparing",
+            "Preparing your SSH connection…",
+        );
+
+        scheduleJourneyPhase(
+            450,
+            "opening-channel",
+            "Opening a secure channel…",
+        );
+
+        scheduleJourneyPhase(
+            1_150,
+            "verifying-host",
+            "Checking the server identity…",
+        );
+
+        scheduleJourneyPhase(
+            2_000,
+            "authenticating",
+            "Authenticating securely…",
+        );
+    }
 
     const canConnect = useMemo(() => {
         const parsedPort = Number(port);
@@ -163,6 +365,38 @@ export function SshConnectionTest({
         privateKey,
         username,
     ]);
+
+    useEffect(() => {
+        if (
+            !pendingAutoConnectProfileId ||
+            pendingAutoConnectProfileId !==
+            selectedProfileId ||
+            !canConnect ||
+            isConnecting ||
+            connectionId
+        ) {
+            return;
+        }
+
+        setPendingAutoConnectProfileId(
+            null,
+        );
+
+        connectionFormRef.current
+            ?.requestSubmit();
+    }, [
+        canConnect,
+        connectionId,
+        isConnecting,
+        pendingAutoConnectProfileId,
+        selectedProfileId,
+    ]);
+
+    useEffect(() => {
+        return () => {
+            clearJourneyTimers();
+        };
+    }, []);
 
     useEffect(() => {
         const parsedPort = Number(port);
@@ -249,6 +483,14 @@ export function SshConnectionTest({
                     const hostKey =
                         event.payload as HostKeyApprovalEvent;
 
+                    awaitingHostApprovalRef.current =
+                        true;
+
+                    updateJourney(
+                        "verifying-host",
+                        "Waiting for server identity approval…",
+                    );
+
                     void (async () => {
                         try {
                             const accepted =
@@ -274,9 +516,31 @@ export function SshConnectionTest({
                                 accepted,
                             );
 
+                            awaitingHostApprovalRef.current =
+                                false;
+
                             if (!accepted) {
+                                journeyCancelledRef.current =
+                                    true;
+
+                                clearJourneyTimers();
+
+                                updateJourney(
+                                    "cancelled",
+                                    "Server identity verification was cancelled.",
+                                );
+
+                                setConnectionState(
+                                    "Cancelled",
+                                );
+
                                 return;
                             }
+
+                            updateJourney(
+                                "authenticating",
+                                "Server identity verified. Authenticating…",
+                            );
 
                             const savedHost =
                                 await saveKnownHost({
@@ -294,6 +558,21 @@ export function SshConnectionTest({
                                 savedHost,
                             );
                         } catch (error) {
+                            const message =
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error);
+
+                            awaitingHostApprovalRef.current =
+                                false;
+
+                            clearJourneyTimers();
+
+                            updateJourney(
+                                "failed",
+                                message,
+                            );
+
                             setConnectionState(
                                 "Connection failed",
                             );
@@ -301,9 +580,7 @@ export function SshConnectionTest({
                             setIsConnecting(false);
 
                             setErrorMessage(
-                                error instanceof Error
-                                    ? error.message
-                                    : String(error),
+                                message,
                             );
                         }
                     })();
@@ -312,7 +589,20 @@ export function SshConnectionTest({
                 }
 
                 if (event.type === "connection.connected") {
-                    setConnectionState("Connected");
+                    if (
+                        journeyPhaseRef.current !==
+                        "connected"
+                    ) {
+                        updateJourney(
+                            "authenticating",
+                            "Secure channel established. Preparing the workspace…",
+                        );
+                    }
+
+                    setConnectionState(
+                        "Finalizing...",
+                    );
+
                     return;
                 }
 
@@ -332,6 +622,14 @@ export function SshConnectionTest({
                             error,
                         );
                     });
+
+                    awaitingHostApprovalRef.current =
+                        false;
+
+                    updateJourney(
+                        "authenticating",
+                        "Server identity verified. Authenticating…",
+                    );
 
                     return;
                 }
@@ -357,6 +655,13 @@ export function SshConnectionTest({
                     securityErrorRef.current =
                         message;
 
+                    clearJourneyTimers();
+
+                    updateJourney(
+                        "failed",
+                        "The server identity changed, so the connection was blocked.",
+                    );
+
                     setConnectionState(
                         "Host key changed",
                     );
@@ -375,24 +680,48 @@ export function SshConnectionTest({
                         message?: string;
                     };
 
+                    const failureMessage =
+                        securityErrorRef.current ??
+                        payload.message ??
+                        "Unable to establish the SSH connection.";
+
+                    clearJourneyTimers();
+
+                    if (
+                        journeyCancelledRef.current
+                    ) {
+                        updateJourney(
+                            "cancelled",
+                            "Connection cancelled",
+                        );
+                    } else {
+                        updateJourney(
+                            "failed",
+                            failureMessage,
+                        );
+                    }
+
                     if (securityErrorRef.current) {
                         setConnectionState(
                             "Host key changed",
                         );
-
-                        setErrorMessage(
-                            securityErrorRef.current,
+                    } else if (
+                        journeyCancelledRef.current
+                    ) {
+                        setConnectionState(
+                            "Cancelled",
                         );
                     } else {
                         setConnectionState(
                             "Connection failed",
                         );
-
-                        setErrorMessage(
-                            payload.message ??
-                            "Unable to establish the SSH connection.",
-                        );
                     }
+
+                    setErrorMessage(
+                        journeyCancelledRef.current
+                            ? ""
+                            : failureMessage,
+                    );
 
                     setIsConnecting(false);
                     return;
@@ -404,6 +733,19 @@ export function SshConnectionTest({
                     setConnectionId(null);
                     setConnectionState("Disconnected");
                     setIsConnecting(false);
+
+                    if (
+                        journeyPhaseRef.current !==
+                        "idle"
+                    ) {
+                        clearJourneyTimers();
+
+                        updateJourney(
+                            "disconnected",
+                            "The SSH session was closed.",
+                        );
+                    }
+
                     return;
                 }
 
@@ -412,9 +754,32 @@ export function SshConnectionTest({
                         message?: string;
                     };
 
+                    const message =
+                        payload.message ??
+                        "SSH connection error.";
+
                     setErrorMessage(
-                        payload.message ?? "SSH connection error.",
+                        message,
                     );
+
+                    if (
+                        ![
+                            "idle",
+                            "connected",
+                            "failed",
+                            "cancelled",
+                            "disconnected",
+                        ].includes(
+                            journeyPhaseRef.current,
+                        )
+                    ) {
+                        clearJourneyTimers();
+
+                        updateJourney(
+                            "failed",
+                            message,
+                        );
+                    }
                 }
             });
 
@@ -541,10 +906,23 @@ export function SshConnectionTest({
         }
     }
 
-    function handleSelectProfile(
+    function populateProfile(
         profile:
             SavedConnectionProfile,
+
+        shouldLoadPassword:
+            boolean,
     ): void {
+        /*
+         * Cancel any previous credential lookup.
+         */
+        credentialLoadVersionRef.current +=
+            1;
+
+        setPendingAutoConnectProfileId(
+            null,
+        );
+
         setSelectedProfileId(
             profile.id,
         );
@@ -573,15 +951,150 @@ export function SshConnectionTest({
         setPrivateKey("");
         setPassphrase("");
 
+        setSavedPasswordState(
+            "idle",
+        );
+
         setErrorMessage("");
         setProfileError("");
 
-        void loadSavedPasswordForProfile(
+        if (!isConnecting) {
+            resetJourney();
+        }
+
+        if (shouldLoadPassword) {
+            void loadSavedPasswordForProfile(
+                profile,
+            );
+        }
+    }
+
+    function handleSelectProfile(
+        profile:
+            SavedConnectionProfile,
+    ): void {
+        populateProfile(
             profile,
+            true,
         );
     }
 
+    async function handleOpenProfile(
+        profile:
+            SavedConnectionProfile,
+    ): Promise<void> {
+        if (
+            isConnecting ||
+            connectionId
+        ) {
+            return;
+        }
+
+        /*
+         * Populate all visible form fields, but handle
+         * password loading here so we know exactly when
+         * it has finished.
+         */
+        populateProfile(
+            profile,
+            false,
+        );
+
+        if (
+            profile.authenticationType ===
+            "privateKey"
+        ) {
+            setProfileError(
+                "This saved connection uses private-key authentication. Enter the private key, then click Connect.",
+            );
+
+            return;
+        }
+
+        const requestVersion =
+            credentialLoadVersionRef.current +
+            1;
+
+        credentialLoadVersionRef.current =
+            requestVersion;
+
+        setSavedPasswordState(
+            "loading",
+        );
+
+        try {
+            const savedPassword =
+                await loadSshPassword(
+                    profile.id,
+                );
+
+            if (
+                credentialLoadVersionRef
+                    .current !==
+                requestVersion
+            ) {
+                return;
+            }
+
+            if (!savedPassword) {
+                setPassword("");
+
+                setSavedPasswordState(
+                    "idle",
+                );
+
+                setProfileError(
+                    "No saved password was found for this connection. Enter the password once and click Connect.",
+                );
+
+                return;
+            }
+
+            setPassword(
+                savedPassword,
+            );
+
+            setSavedPasswordState(
+                "loaded",
+            );
+
+            /*
+             * The effect below submits after React has
+             * applied the profile and password state.
+             */
+            setPendingAutoConnectProfileId(
+                profile.id,
+            );
+        } catch (error) {
+            if (
+                credentialLoadVersionRef
+                    .current !==
+                requestVersion
+            ) {
+                return;
+            }
+
+            setPassword("");
+
+            setSavedPasswordState(
+                "idle",
+            );
+
+            setProfileError(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        }
+    }
+
     function handleNewProfile(): void {
+        resetJourney();
+
+        setPendingAutoConnectProfileId(
+            null,
+        );
+
         cancelSavedPasswordLoad(
             true,
         );
@@ -793,11 +1306,20 @@ export function SshConnectionTest({
         }
     }
 
-    async function handleConnect(
+    function handleConnect(
         event:
             FormEvent<HTMLFormElement>,
-    ): Promise<void> {
+    ): void {
         event.preventDefault();
+
+        void performConnection();
+    }
+
+    async function performConnection():
+        Promise<void> {
+        setPendingAutoConnectProfileId(
+            null,
+        );
 
         if (!canConnect) {
             return;
@@ -823,6 +1345,17 @@ export function SshConnectionTest({
 
         const parsedPort =
             Number(port);
+
+        startConnectionJourney({
+            profileName:
+                profileName.trim(),
+            host:
+                normalizedHost,
+            port:
+                parsedPort,
+            username:
+                normalizedUsername,
+        });
 
         /*
          * Capture the password used for this exact
@@ -1057,6 +1590,38 @@ export function SshConnectionTest({
                 }
             }
 
+            clearJourneyTimers();
+
+            updateJourney(
+                "authenticating",
+                "Secure channel ready. Finalizing the workspace…",
+            );
+
+            const elapsedJourneyMs =
+                performance.now() -
+                journeyStartedAtRef.current;
+
+            await wait(
+                Math.max(
+                    0,
+                    MIN_CONNECTION_JOURNEY_MS -
+                    elapsedJourneyMs,
+                ),
+            );
+
+            setConnectionState(
+                "Connected",
+            );
+
+            updateJourney(
+                "connected",
+                "Connected securely",
+            );
+
+            await wait(
+                CONNECTION_SUCCESS_HOLD_MS,
+            );
+
             onConnected({
                 connectionId:
                     newConnectionId,
@@ -1075,18 +1640,65 @@ export function SshConnectionTest({
                     normalizedUsername,
             });
         } catch (error) {
-            setConnectionState(
-                "Connection failed",
-            );
-
-            setErrorMessage(
+            const message =
                 error instanceof Error
                     ? error.message
-                    : String(error),
-            );
+                    : String(error);
+
+            clearJourneyTimers();
+
+            if (
+                journeyCancelledRef.current
+            ) {
+                updateJourney(
+                    "cancelled",
+                    "Connection cancelled",
+                );
+
+                setConnectionState(
+                    "Cancelled",
+                );
+
+                setErrorMessage("");
+            } else {
+                updateJourney(
+                    "failed",
+                    message,
+                );
+
+                setConnectionState(
+                    "Connection failed",
+                );
+
+                setErrorMessage(
+                    message,
+                );
+            }
         } finally {
             setIsConnecting(false);
         }
+    }
+
+    function handleBackFromJourney(): void {
+        resetJourney();
+    }
+
+    function handleRetryJourney(): void {
+        if (
+            isConnecting ||
+            connectionId
+        ) {
+            return;
+        }
+
+        resetJourney();
+
+        /*
+         * performConnection() starts the new journey before
+         * its first await. React therefore batches the reset
+         * and restart without flashing the form in between.
+         */
+        void performConnection();
     }
 
     async function handleForgetHostKey():
@@ -1129,6 +1741,36 @@ export function SshConnectionTest({
         }
     }
 
+    if (journeyPhase !== "idle") {
+        return (
+            <SshConnectionJourney
+                page
+                phase={journeyPhase}
+                profileName={
+                    journeyTarget.profileName
+                }
+                host={
+                    journeyTarget.host
+                }
+                port={
+                    journeyTarget.port
+                }
+                username={
+                    journeyTarget.username
+                }
+                message={
+                    journeyMessage
+                }
+                onBack={
+                    handleBackFromJourney
+                }
+                onRetry={
+                    handleRetryJourney
+                }
+            />
+        );
+    }
+
     return (
         <main className="connection-home-page">
             <SavedConnectionsPanel
@@ -1139,11 +1781,17 @@ export function SshConnectionTest({
                 loading={profilesLoading}
                 onSelect={handleSelectProfile}
                 onNew={handleNewProfile}
+                onOpen={(profile) => {
+                    void handleOpenProfile(
+                        profile,
+                    );
+                }}
                 onDelete={(profile) => {
                     void handleDeleteProfile(
                         profile,
                     );
                 }}
+
             />
 
             <section className="ssh-card">
@@ -1165,6 +1813,7 @@ export function SshConnectionTest({
                 </header>
 
                 <form
+                    ref={connectionFormRef}
                     className="ssh-form"
                     onSubmit={handleConnect}
                 >

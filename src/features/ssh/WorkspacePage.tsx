@@ -38,6 +38,11 @@ import {
     SshTerminal,
 } from "./SshTerminal";
 
+// import {
+//     SshConnectionJourney,
+//     type ConnectionJourneyPhase,
+// } from "./SshConnectionJourney";
+
 import {
     TransferQueue,
 } from "./TransferQueue";
@@ -55,11 +60,13 @@ const PANE_KEYBOARD_STEP = 2;
 interface WorkspacePageProps {
     connectionId: string;
 
+    title: string;
     host: string;
     port: number;
     username: string;
 
     isActive: boolean;
+    isDisconnecting: boolean;
 
     onDisconnected: (
         connectionId: string,
@@ -68,16 +75,31 @@ interface WorkspacePageProps {
 
 export function WorkspacePage({
     connectionId,
+    // title,
     host,
     port,
     username,
     isActive,
+    isDisconnecting,
     onDisconnected,
 }: WorkspacePageProps) {
     const [
         connectionError,
         setConnectionError,
     ] = useState("");
+
+
+    // const [
+    //     disconnectPhase,
+    //     setDisconnectPhase,
+    // ] = useState<ConnectionJourneyPhase>(
+    //     "idle",
+    // );
+
+    const disconnectTimerRef =
+        useRef<number | null>(
+            null,
+        );
 
     const workspaceGridRef =
         useRef<HTMLElement | null>(
@@ -336,10 +358,27 @@ export function WorkspacePage({
         );
     }
 
+    // useEffect(() => {
+    //     if (isDisconnecting) {
+    //         setDisconnectPhase(
+    //             "disconnecting",
+    //         );
+    //     }
+    // }, [isDisconnecting]);
+
     useEffect(() => {
         return () => {
             isResizingWorkspaceRef.current =
                 false;
+
+            if (
+                disconnectTimerRef.current !==
+                null
+            ) {
+                window.clearTimeout(
+                    disconnectTimerRef.current,
+                );
+            }
 
             document.body.classList.remove(
                 "workspace-pane-resizing",
@@ -366,9 +405,32 @@ export function WorkspacePage({
                         return;
                     }
 
-                    onDisconnected(
-                        connectionId,
-                    );
+                    // setDisconnectPhase(
+                    //     "disconnected",
+                    // );
+
+                    if (isDisconnecting) {
+                        return;
+                    }
+
+                    if (
+                        disconnectTimerRef.current !==
+                        null
+                    ) {
+                        window.clearTimeout(
+                            disconnectTimerRef.current,
+                        );
+                    }
+
+                    disconnectTimerRef.current =
+                        window.setTimeout(
+                            () => {
+                                onDisconnected(
+                                    connectionId,
+                                );
+                            },
+                            1_050,
+                        );
 
                     return;
                 }
@@ -399,6 +461,7 @@ export function WorkspacePage({
         );
     }, [
         connectionId,
+        isDisconnecting,
         onDisconnected,
     ]);
 
@@ -410,6 +473,26 @@ export function WorkspacePage({
                     : "workspace-page workspace-page--editor"
             }
         >
+            {/* {disconnectPhase !==
+                "idle" && (
+                <div className="workspace-disconnection-overlay">
+                    <SshConnectionJourney
+                        phase={
+                            disconnectPhase
+                        }
+                        profileName={
+                            title
+                        }
+                        host={host}
+                        port={port}
+                        username={
+                            username
+                        }
+                        compact
+                    />
+                </div>
+            )} */}
+
             {connectionError && (
                 <div className="workspace-error">
                     {connectionError}

@@ -5,14 +5,21 @@ import {
     useRef,
     useState,
     type KeyboardEvent as ReactKeyboardEvent,
+    type MouseEvent as ReactMouseEvent,
 } from "react";
 
 import {
     lstat,
     mkdir,
     readDir,
+    remove,
+    rename,
     type DirEntry,
 } from "@tauri-apps/plugin-fs";
+
+import {
+    revealItemInDir,
+} from "@tauri-apps/plugin-opener";
 
 import {
     basename,
@@ -22,13 +29,34 @@ import {
 
 import {
     ArrowDown,
+    ArrowLeftRight,
     ArrowUp,
+    Copy,
     File,
     Folder,
+    FolderOpen,
     FolderPlus,
+    Info,
     Link2,
     Loader,
+    Pencil,
+    RefreshCw,
+    Search,
+    Trash2,
 } from "lucide-react";
+
+import {
+    FilePaneContextMenu,
+    type FilePaneContextItem,
+} from "./FilePaneContextMenu";
+
+import {
+    FilePaneDetailsDialog,
+} from "./FilePaneDetailsDialog";
+
+import {
+    confirm as confirmDialog,
+} from "@tauri-apps/plugin-dialog";
 
 type LocalEntryType =
     | "file"
@@ -44,6 +72,12 @@ interface LocalFileEntry {
 
     size: number;
     modifiedAt: number | null;
+}
+
+interface LocalContextMenuState {
+    x: number;
+    y: number;
+    entry: LocalFileEntry | null;
 }
 
 interface LocalBreadcrumb {
@@ -369,6 +403,33 @@ function shouldIgnoreKeyboardTarget(
     );
 }
 
+async function copyTextToClipboard(
+    value: string,
+): Promise<void> {
+    await navigator.clipboard.writeText(
+        value,
+    );
+}
+
+function getLocalEntryTypeLabel(
+    type: LocalEntryType,
+): string {
+    switch (type) {
+        case "directory":
+            return "Folder";
+
+        case "file":
+            return "File";
+
+        case "symlink":
+            return "Symbolic link";
+
+        case "other":
+        default:
+            return "Other";
+    }
+}
+
 function validateFolderName(
     rawName: string,
 ): string | null {
@@ -476,6 +537,25 @@ export function LocalFileBrowser({
     >(null);
 
     const [
+        contextMenu,
+        setContextMenu,
+    ] = useState<
+        LocalContextMenuState | null
+    >(null);
+
+    const [
+        detailsEntry,
+        setDetailsEntry,
+    ] = useState<
+        LocalFileEntry | null
+    >(null);
+
+    const [
+        toastMessage,
+        setToastMessage,
+    ] = useState("");
+
+    const [
         sortKey,
         setSortKey,
     ] = useState<
@@ -511,6 +591,14 @@ export function LocalFileBrowser({
         useRef("");
 
     const typeSelectTimerRef =
+        useRef<
+            ReturnType<
+                typeof setTimeout
+            > |
+            null
+        >(null);
+
+    const toastTimerRef =
         useRef<
             ReturnType<
                 typeof setTimeout
@@ -804,9 +892,36 @@ export function LocalFileBrowser({
                 );
             }
 
+            if (
+                toastTimerRef.current
+            ) {
+                clearTimeout(
+                    toastTimerRef.current,
+                );
+            }
+
             rowRefs.current.clear();
         };
     }, []);
+
+    function showToast(
+        message: string,
+    ): void {
+        if (toastTimerRef.current) {
+            clearTimeout(
+                toastTimerRef.current,
+            );
+        }
+
+        setToastMessage(message);
+
+        toastTimerRef.current =
+            setTimeout(() => {
+                setToastMessage("");
+                toastTimerRef.current =
+                    null;
+            }, 2_500);
+    }
 
     function handleSort(
         nextSortKey:
@@ -1066,8 +1181,10 @@ export function LocalFileBrowser({
         }
     }
 
-    async function handleCreateFolder():
-        Promise<void> {
+    async function handleCreateFolder(
+        parentPath: string =
+            currentPath,
+    ): Promise<void> {
         const enteredName =
             window.prompt(
                 "New folder name",
@@ -1099,7 +1216,7 @@ export function LocalFileBrowser({
         try {
             const folderPath =
                 await join(
-                    currentPath,
+                    parentPath,
                     enteredName.trim(),
                 );
 
@@ -1119,6 +1236,238 @@ export function LocalFileBrowser({
             setIsMutating(
                 false,
             );
+        }
+    }
+
+    function handleContextMenuOpen(
+        event:
+            ReactMouseEvent<HTMLElement>,
+        entry: LocalFileEntry | null,
+    ): void {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (loading || isMutating) {
+            return;
+        }
+
+        const estimatedWidth = 224;
+        const estimatedHeight =
+            entry
+                ? 360
+                : 250;
+        const margin = 8;
+
+        setSelectedPath(
+            entry?.path ?? null,
+        );
+
+        setContextMenu({
+            x: Math.max(
+                margin,
+                Math.min(
+                    event.clientX,
+                    window.innerWidth -
+                    estimatedWidth -
+                    margin,
+                ),
+            ),
+
+            y: Math.max(
+                margin,
+                Math.min(
+                    event.clientY,
+                    window.innerHeight -
+                    estimatedHeight -
+                    margin,
+                ),
+            ),
+
+            entry,
+        });
+    }
+
+    async function handleCopyLocalPath(
+        path: string,
+    ): Promise<void> {
+        setErrorMessage("");
+
+        try {
+            await copyTextToClipboard(
+                path,
+            );
+
+            showToast(
+                "Local path copied",
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        }
+    }
+
+    function handleCopyToOtherPane():
+        void {
+        showToast(
+            "Copy to Other Pane will be available in the next transfer milestone.",
+        );
+    }
+
+    async function handleRevealPath(
+        path: string,
+    ): Promise<void> {
+        setErrorMessage("");
+
+        try {
+            await revealItemInDir(
+                path,
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        }
+    }
+
+    async function handleRenameEntry(
+        entry: LocalFileEntry,
+    ): Promise<void> {
+        const enteredName =
+            window.prompt(
+                "Rename local entry",
+                entry.name,
+            );
+
+        if (enteredName === null) {
+            return;
+        }
+
+        const validationError =
+            validateFolderName(
+                enteredName,
+            );
+
+        if (validationError) {
+            setErrorMessage(
+                validationError,
+            );
+            return;
+        }
+
+        const nextName =
+            enteredName.trim();
+
+        if (nextName === entry.name) {
+            return;
+        }
+
+        setIsMutating(true);
+        setErrorMessage("");
+
+        try {
+            const parentPath =
+                await dirname(
+                    entry.path,
+                );
+
+            const destinationPath =
+                await join(
+                    parentPath,
+                    nextName,
+                );
+
+            await rename(
+                entry.path,
+                destinationPath,
+            );
+
+            setSelectedPath(null);
+            await loadDirectory();
+
+            showToast(
+                `Renamed to ${nextName}`,
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        } finally {
+            setIsMutating(false);
+        }
+    }
+
+    async function handleDeleteEntry(
+        entry: LocalFileEntry,
+    ): Promise<void> {
+        const isDirectory =
+            entry.type === "directory";
+
+        const confirmed =
+            await confirmDialog(
+                [
+                    isDirectory
+                        ? `Delete folder "${entry.name}" and all of its contents?`
+                        : `Delete file "${entry.name}"?`,
+
+                    "",
+
+                    isDirectory
+                        ? "The folder and everything inside it will be permanently deleted."
+                        : "This file will be permanently deleted.",
+
+                    "",
+
+                    entry.path,
+                ].join("\n"),
+                {
+                    title:
+                        isDirectory
+                            ? "Delete local folder?"
+                            : "Delete local file?",
+
+                    kind: "warning",
+                },
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setIsMutating(true);
+        setErrorMessage("");
+
+        try {
+            await remove(
+                entry.path,
+                {
+                    recursive:
+                        isDirectory,
+                },
+            );
+
+            setSelectedPath(null);
+            await loadDirectory();
+
+            showToast(
+                isDirectory
+                    ? `Deleted folder ${entry.name}`
+                    : `Deleted ${entry.name}`,
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        } finally {
+            setIsMutating(false);
         }
     }
 
@@ -1296,6 +1645,181 @@ export function LocalFileBrowser({
             rootPath,
         );
 
+    const contextMenuItems:
+        FilePaneContextItem[] =
+        contextMenu?.entry
+            ? [
+                ...(contextMenu.entry.type ===
+                    "directory"
+                    ? [
+                        {
+                            type: "action" as const,
+                            id: "open",
+                            label: "Open",
+                            icon: (
+                                <FolderOpen size={15} />
+                            ),
+                            onSelect: () =>
+                                handleOpenEntry(
+                                    contextMenu.entry!,
+                                ),
+                        },
+                        {
+                            type: "action" as const,
+                            id: "new-folder",
+                            label: "New Folder",
+                            icon: (
+                                <FolderPlus size={15} />
+                            ),
+                            onSelect: () =>
+                                handleCreateFolder(
+                                    contextMenu.entry!.path,
+                                ),
+                        },
+                    ]
+                    : []),
+                {
+                    type: "action",
+                    id: "copy-other-pane",
+                    label: "Copy to Other Pane",
+                    icon: (
+                        <ArrowLeftRight size={15} />
+                    ),
+                    onSelect:
+                        handleCopyToOtherPane,
+                    hint: "Soon",
+                },
+                {
+                    type: "separator",
+                    id: "manage-separator",
+                },
+                {
+                    type: "action",
+                    id: "rename",
+                    label: "Rename",
+                    icon: (
+                        <Pencil size={15} />
+                    ),
+                    onSelect: () =>
+                        handleRenameEntry(
+                            contextMenu.entry!,
+                        ),
+                },
+                {
+                    type: "action",
+                    id: "delete",
+                    label: "Delete",
+                    icon: (
+                        <Trash2 size={15} />
+                    ),
+                    onSelect: () =>
+                        handleDeleteEntry(
+                            contextMenu.entry!,
+                        ),
+                    danger: true,
+                },
+                {
+                    type: "separator",
+                    id: "info-separator",
+                },
+                {
+                    type: "action",
+                    id: "copy-path",
+                    label: "Copy Local Path",
+                    icon: (
+                        <Copy size={15} />
+                    ),
+                    onSelect: () =>
+                        handleCopyLocalPath(
+                            contextMenu.entry!.path,
+                        ),
+                },
+                {
+                    type: "action",
+                    id: "reveal",
+                    label: "Reveal in File Explorer",
+                    icon: (
+                        <Search size={15} />
+                    ),
+                    onSelect: () =>
+                        handleRevealPath(
+                            contextMenu.entry!.path,
+                        ),
+                },
+                {
+                    type: "action",
+                    id: "details",
+                    label: "Details",
+                    icon: (
+                        <Info size={15} />
+                    ),
+                    onSelect: () =>
+                        setDetailsEntry(
+                            contextMenu.entry,
+                        ),
+                },
+            ]
+            : [
+                {
+                    type: "action",
+                    id: "new-folder",
+                    label: "New Folder",
+                    icon: (
+                        <FolderPlus size={15} />
+                    ),
+                    onSelect: () =>
+                        handleCreateFolder(),
+                },
+                {
+                    type: "action",
+                    id: "choose-folder",
+                    label: "Choose Folder",
+                    icon: (
+                        <FolderOpen size={15} />
+                    ),
+                    onSelect:
+                        onChooseFolder,
+                },
+                {
+                    type: "action",
+                    id: "refresh",
+                    label: "Refresh",
+                    icon: (
+                        <RefreshCw size={15} />
+                    ),
+                    onSelect:
+                        loadDirectory,
+                },
+                {
+                    type: "separator",
+                    id: "path-separator",
+                },
+                {
+                    type: "action",
+                    id: "copy-path",
+                    label: "Copy Current Path",
+                    icon: (
+                        <Copy size={15} />
+                    ),
+                    onSelect: () =>
+                        handleCopyLocalPath(
+                            currentPath,
+                        ),
+                },
+                {
+                    type: "action",
+                    id: "reveal",
+                    label: "Reveal in File Explorer",
+                    icon: (
+                        <Search size={15} />
+                    ),
+                    onSelect: () =>
+                        handleRevealPath(
+                            currentPath,
+                        ),
+                },
+            ];
+
     return (
         <section className="local-file-browser">
             <div className="local-file-browser__toolbar">
@@ -1422,6 +1946,12 @@ export function LocalFileBrowser({
                 aria-label="Local files and folders"
                 onKeyDown={
                     handleKeyDown
+                }
+                onContextMenu={(event) =>
+                    handleContextMenuOpen(
+                        event,
+                        null,
+                    )
                 }
             >
                 {loading ? (
@@ -1589,6 +2119,12 @@ export function LocalFileBrowser({
                                                 entry,
                                             )
                                         }
+                                        onContextMenu={(event) =>
+                                            handleContextMenuOpen(
+                                                event,
+                                                entry,
+                                            )
+                                        }
                                     >
                                         <td>
                                             <span
@@ -1653,6 +2189,75 @@ export function LocalFileBrowser({
                     </span>
                 )}
             </footer>
+
+            {contextMenu && (
+                <FilePaneContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    ariaLabel="Local file actions"
+                    items={
+                        contextMenuItems
+                    }
+                    onClose={() =>
+                        setContextMenu(null)
+                    }
+                />
+            )}
+
+            {detailsEntry && (
+                <FilePaneDetailsDialog
+                    subtitle={
+                        detailsEntry.name
+                    }
+                    fields={[
+                        {
+                            label: "Name",
+                            value:
+                                detailsEntry.name,
+                        },
+                        {
+                            label: "Type",
+                            value:
+                                getLocalEntryTypeLabel(
+                                    detailsEntry.type,
+                                ),
+                        },
+                        {
+                            label: "Local path",
+                            value:
+                                detailsEntry.path,
+                            path: true,
+                        },
+                        {
+                            label: "Size",
+                            value:
+                                detailsEntry.type ===
+                                    "directory"
+                                    ? "—"
+                                    : `${formatFileSize(detailsEntry.size)} · ${detailsEntry.size.toLocaleString()} bytes`,
+                        },
+                        {
+                            label: "Modified",
+                            value:
+                                formatModifiedTime(
+                                    detailsEntry.modifiedAt,
+                                ),
+                        },
+                    ]}
+                    onClose={() =>
+                        setDetailsEntry(null)
+                    }
+                />
+            )}
+
+            {toastMessage && (
+                <div
+                    className="file-explorer-toast"
+                    role="status"
+                >
+                    {toastMessage}
+                </div>
+            )}
         </section>
     );
 }

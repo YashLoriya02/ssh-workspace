@@ -14,6 +14,10 @@ interface SavedConnectionsPanelProps {
 
     onNew: () => void;
 
+    onOpen: (
+        profile: SavedConnectionProfile,
+    ) => void;
+
     onDelete: (
         profile: SavedConnectionProfile,
     ) => void;
@@ -38,6 +42,7 @@ export function SavedConnectionsPanel({
     onSelect,
     onNew,
     onDelete,
+    onOpen,
 }: SavedConnectionsPanelProps) {
     return (
         <aside className="saved-connections-panel">
@@ -90,6 +95,10 @@ export function SavedConnectionsPanel({
                             onClick={() =>
                                 onSelect(profile)
                             }
+                            onDoubleClick={() =>
+                                onOpen(profile)
+                            }
+                            title="Double-click to connect"
                         >
                             <span className="saved-connection-icon">
                                 {profile.name
@@ -123,6 +132,10 @@ export function SavedConnectionsPanel({
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     onDelete(profile);
+                                }}
+                                onDoubleClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
                                 }}
                                 onKeyDown={(event) => {
                                     if (

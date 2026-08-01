@@ -6,23 +6,52 @@ import {
     useState,
     type FormEvent,
     type KeyboardEvent as ReactKeyboardEvent,
+    type MouseEvent as ReactMouseEvent,
 } from "react";
 
 import {
     ArrowDown,
+    ArrowLeftRight,
     ArrowUp,
+    Copy,
+    Download,
     File,
     Folder,
+    FolderOpen,
     FolderPlus,
+    Info,
     Link2,
     Loader,
+    Pencil,
+    RefreshCw,
+    Trash2,
+    Upload,
 } from "lucide-react";
+
+import {
+    open as openDialog,
+    save as saveDialog,
+    confirm as confirmDialog,
+} from "@tauri-apps/plugin-dialog";
+
+import {
+    basename,
+} from "@tauri-apps/api/path";
 
 import {
     backendClient,
     type RemoteDirectoryListing,
     type RemoteFileEntry,
 } from "../../backend/backend-client";
+
+import {
+    FilePaneContextMenu,
+    type FilePaneContextItem,
+} from "./FilePaneContextMenu";
+
+import {
+    FilePaneDetailsDialog,
+} from "./FilePaneDetailsDialog";
 
 interface RemoteFileBrowserProps {
     connectionId: string;
@@ -38,6 +67,18 @@ interface RemoteFileBrowserProps {
 interface RemoteBreadcrumb {
     label: string;
     path: string;
+}
+
+interface RemoteContextMenuState {
+    x: number;
+    y: number;
+    entry: RemoteFileEntry | null;
+}
+
+interface RemoteDetailsState {
+    entry: RemoteFileEntry;
+    loading: boolean;
+    error: string;
 }
 
 type RemoteSortKey =
@@ -110,6 +151,33 @@ function formatModifiedTime(
     return modifiedTimeFormatter.format(
         new Date(timestamp),
     );
+}
+
+async function copyTextToClipboard(
+    value: string,
+): Promise<void> {
+    await navigator.clipboard.writeText(
+        value,
+    );
+}
+
+function getRemoteEntryTypeLabel(
+    type: RemoteFileEntry["type"],
+): string {
+    switch (type) {
+        case "directory":
+            return "Folder";
+
+        case "file":
+            return "File";
+
+        case "symlink":
+            return "Symbolic link";
+
+        case "other":
+        default:
+            return "Other";
+    }
 }
 
 function getRemoteParentDirectory(
@@ -346,6 +414,25 @@ export function RemoteFileBrowser({
     >(null);
 
     const [
+        contextMenu,
+        setContextMenu,
+    ] = useState<
+        RemoteContextMenuState | null
+    >(null);
+
+    const [
+        detailsDialog,
+        setDetailsDialog,
+    ] = useState<
+        RemoteDetailsState | null
+    >(null);
+
+    const [
+        toastMessage,
+        setToastMessage,
+    ] = useState("");
+
+    const [
         sortKey,
         setSortKey,
     ] = useState<
@@ -384,6 +471,14 @@ export function RemoteFileBrowser({
         useRef("");
 
     const typeSelectTimerRef =
+        useRef<
+            ReturnType<
+                typeof setTimeout
+            > |
+            null
+        >(null);
+
+    const toastTimerRef =
         useRef<
             ReturnType<
                 typeof setTimeout
@@ -598,9 +693,36 @@ export function RemoteFileBrowser({
                 );
             }
 
+            if (
+                toastTimerRef.current
+            ) {
+                clearTimeout(
+                    toastTimerRef.current,
+                );
+            }
+
             rowRefs.current.clear();
         };
     }, []);
+
+    function showToast(
+        message: string,
+    ): void {
+        if (toastTimerRef.current) {
+            clearTimeout(
+                toastTimerRef.current,
+            );
+        }
+
+        setToastMessage(message);
+
+        toastTimerRef.current =
+            setTimeout(() => {
+                setToastMessage("");
+                toastTimerRef.current =
+                    null;
+            }, 2_500);
+    }
 
     function handleSort(
         nextSortKey:
@@ -872,10 +994,13 @@ export function RemoteFileBrowser({
         );
     }
 
-    async function handleCreateFolder():
-        Promise<void> {
+    async function handleCreateFolder(
+        parentPath: string =
+            listing?.path ?? "",
+    ): Promise<void> {
         if (
             !listing ||
+            !parentPath ||
             isMutating
         ) {
             return;
@@ -912,7 +1037,7 @@ export function RemoteFileBrowser({
         try {
             const remotePath =
                 joinRemotePath(
-                    listing.path,
+                    parentPath,
                     enteredName.trim(),
                 );
 
@@ -931,6 +1056,388 @@ export function RemoteFileBrowser({
             );
         } finally {
             setIsMutating(false);
+        }
+    }
+
+    function handleContextMenuOpen(
+        event:
+            ReactMouseEvent<HTMLElement>,
+        entry: RemoteFileEntry | null,
+    ): void {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (
+            loading ||
+            isMutating ||
+            !listing
+        ) {
+            return;
+        }
+
+        const estimatedWidth = 224;
+        const estimatedHeight =
+            entry
+                ? 390
+                : 260;
+        const margin = 8;
+
+        setSelectedPath(
+            entry?.path ?? null,
+        );
+
+        setContextMenu({
+            x: Math.max(
+                margin,
+                Math.min(
+                    event.clientX,
+                    window.innerWidth -
+                    estimatedWidth -
+                    margin,
+                ),
+            ),
+
+            y: Math.max(
+                margin,
+                Math.min(
+                    event.clientY,
+                    window.innerHeight -
+                    estimatedHeight -
+                    margin,
+                ),
+            ),
+
+            entry,
+        });
+    }
+
+    async function handleCopyRemotePath(
+        remotePath: string,
+    ): Promise<void> {
+        setErrorMessage("");
+
+        try {
+            await copyTextToClipboard(
+                remotePath,
+            );
+
+            showToast(
+                "Remote path copied",
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        }
+    }
+
+    function handleCopyToOtherPane():
+        void {
+        showToast(
+            "Copy to Other Pane will be available in the next transfer milestone.",
+        );
+    }
+
+    async function handleUploadFiles(
+        targetDirectoryPath: string =
+            listing?.path ?? "",
+    ): Promise<void> {
+        if (!targetDirectoryPath) {
+            return;
+        }
+
+        setErrorMessage("");
+
+        try {
+            const selected =
+                await openDialog({
+                    title:
+                        "Select files to upload",
+                    multiple: true,
+                    directory: false,
+                });
+
+            if (!selected) {
+                return;
+            }
+
+            const localPaths =
+                Array.isArray(selected)
+                    ? selected
+                    : [selected];
+
+            await Promise.all(
+                localPaths.map(
+                    async (localPath) => {
+                        const fileName =
+                            await basename(
+                                localPath,
+                            );
+
+                        await backendClient
+                            .uploadLocalFile(
+                                connectionId,
+                                localPath,
+                                joinRemotePath(
+                                    targetDirectoryPath,
+                                    fileName,
+                                ),
+                                false,
+                            );
+                    },
+                ),
+            );
+
+            showToast(
+                localPaths.length === 1
+                    ? "Upload started"
+                    : `${localPaths.length} uploads started`,
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        }
+    }
+
+    async function handleDownloadEntry(
+        entry: RemoteFileEntry,
+    ): Promise<void> {
+        if (entry.type !== "file") {
+            return;
+        }
+
+        setErrorMessage("");
+
+        try {
+            const localPath =
+                await saveDialog({
+                    title:
+                        `Download ${entry.name}`,
+                    defaultPath:
+                        entry.name,
+                });
+
+            if (!localPath) {
+                return;
+            }
+
+            await backendClient
+                .downloadRemoteFile(
+                    connectionId,
+                    entry.path,
+                    localPath,
+                );
+
+            showToast(
+                "Download started",
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        }
+    }
+
+    async function handleRenameEntry(
+        entry: RemoteFileEntry,
+    ): Promise<void> {
+        const enteredName =
+            window.prompt(
+                "Rename remote entry",
+                entry.name,
+            );
+
+        if (enteredName === null) {
+            return;
+        }
+
+        const validationError =
+            validateRemoteName(
+                enteredName,
+            );
+
+        if (validationError) {
+            setErrorMessage(
+                validationError,
+            );
+            return;
+        }
+
+        const nextName =
+            enteredName.trim();
+
+        if (nextName === entry.name) {
+            return;
+        }
+
+        const parentPath =
+            getRemoteParentDirectory(
+                entry.path,
+            );
+
+        const destinationPath =
+            joinRemotePath(
+                parentPath,
+                nextName,
+            );
+
+        if (
+            listing?.path ===
+            parentPath &&
+            listing.entries.some(
+                (candidate) =>
+                    candidate.name ===
+                    nextName &&
+                    candidate.path !==
+                    entry.path,
+            )
+        ) {
+            setErrorMessage(
+                `"${nextName}" already exists in this directory.`,
+            );
+            return;
+        }
+
+        setIsMutating(true);
+        setErrorMessage("");
+
+        try {
+            await backendClient
+                .renameRemotePath(
+                    connectionId,
+                    entry.path,
+                    destinationPath,
+                );
+
+            setSelectedPath(null);
+            await loadDirectory();
+
+            showToast(
+                `Renamed to ${nextName}`,
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        } finally {
+            setIsMutating(false);
+        }
+    }
+
+    async function handleDeleteEntry(
+        entry: RemoteFileEntry,
+    ): Promise<void> {
+        const isDirectory =
+            entry.type === "directory";
+
+        const confirmed =
+            await confirmDialog(
+                [
+                    isDirectory
+                        ? `Delete remote folder "${entry.name}"?`
+                        : `Delete remote file "${entry.name}"?`,
+
+                    "",
+
+                    isDirectory
+                        ? "Only empty remote folders can currently be deleted."
+                        : "This remote file will be permanently deleted.",
+
+                    "",
+
+                    entry.path,
+                ].join("\n"),
+                {
+                    title:
+                        isDirectory
+                            ? "Delete remote folder?"
+                            : "Delete remote file?",
+
+                    kind: "warning",
+                },
+            );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setIsMutating(true);
+        setErrorMessage("");
+
+        try {
+            if (isDirectory) {
+                await backendClient
+                    .deleteRemoteDirectory(
+                        connectionId,
+                        entry.path,
+                    );
+            } else {
+                await backendClient
+                    .deleteRemoteFile(
+                        connectionId,
+                        entry.path,
+                    );
+            }
+
+            setSelectedPath(null);
+            await loadDirectory();
+
+            showToast(
+                isDirectory
+                    ? `Deleted folder ${entry.name}`
+                    : `Deleted ${entry.name}`,
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error),
+            );
+        } finally {
+            setIsMutating(false);
+        }
+    }
+
+    async function handleShowDetails(
+        entry: RemoteFileEntry,
+    ): Promise<void> {
+        setDetailsDialog({
+            entry,
+            loading: true,
+            error: "",
+        });
+
+        try {
+            const freshEntry =
+                await backendClient
+                    .statRemotePath(
+                        connectionId,
+                        entry.path,
+                    );
+
+            setDetailsDialog({
+                entry: freshEntry,
+                loading: false,
+                error: "",
+            });
+        } catch (error) {
+            setDetailsDialog({
+                entry,
+                loading: false,
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : String(error),
+            });
         }
     }
 
@@ -1107,6 +1614,182 @@ export function RemoteFileBrowser({
             ),
         );
 
+    const contextMenuItems:
+        FilePaneContextItem[] =
+        contextMenu?.entry
+            ? [
+                ...(contextMenu.entry.type ===
+                    "directory"
+                    ? [
+                        {
+                            type: "action" as const,
+                            id: "open",
+                            label: "Open",
+                            icon: (
+                                <FolderOpen size={15} />
+                            ),
+                            onSelect: () =>
+                                handleOpenEntry(
+                                    contextMenu.entry!,
+                                ),
+                        },
+                        {
+                            type: "action" as const,
+                            id: "upload-here",
+                            label: "Upload Here",
+                            icon: (
+                                <Upload size={15} />
+                            ),
+                            onSelect: () =>
+                                handleUploadFiles(
+                                    contextMenu.entry!.path,
+                                ),
+                        },
+                        {
+                            type: "action" as const,
+                            id: "new-folder",
+                            label: "New Folder",
+                            icon: (
+                                <FolderPlus size={15} />
+                            ),
+                            onSelect: () =>
+                                handleCreateFolder(
+                                    contextMenu.entry!.path,
+                                ),
+                        },
+                    ]
+                    : [
+                        {
+                            type: "action" as const,
+                            id: "download",
+                            label: "Download",
+                            icon: (
+                                <Download size={15} />
+                            ),
+                            onSelect: () =>
+                                handleDownloadEntry(
+                                    contextMenu.entry!,
+                                ),
+                        },
+                    ]),
+                {
+                    type: "action",
+                    id: "copy-other-pane",
+                    label: "Copy to Other Pane",
+                    icon: (
+                        <ArrowLeftRight size={15} />
+                    ),
+                    onSelect:
+                        handleCopyToOtherPane,
+                    hint: "Soon",
+                },
+                {
+                    type: "separator",
+                    id: "manage-separator",
+                },
+                {
+                    type: "action",
+                    id: "rename",
+                    label: "Rename",
+                    icon: (
+                        <Pencil size={15} />
+                    ),
+                    onSelect: () =>
+                        handleRenameEntry(
+                            contextMenu.entry!,
+                        ),
+                },
+                {
+                    type: "action",
+                    id: "delete",
+                    label: "Delete",
+                    icon: (
+                        <Trash2 size={15} />
+                    ),
+                    onSelect: () =>
+                        handleDeleteEntry(
+                            contextMenu.entry!,
+                        ),
+                    danger: true,
+                },
+                {
+                    type: "separator",
+                    id: "info-separator",
+                },
+                {
+                    type: "action",
+                    id: "copy-path",
+                    label: "Copy Remote Path",
+                    icon: (
+                        <Copy size={15} />
+                    ),
+                    onSelect: () =>
+                        handleCopyRemotePath(
+                            contextMenu.entry!.path,
+                        ),
+                },
+                {
+                    type: "action",
+                    id: "details",
+                    label: "Details",
+                    icon: (
+                        <Info size={15} />
+                    ),
+                    onSelect: () =>
+                        handleShowDetails(
+                            contextMenu.entry!,
+                        ),
+                },
+            ]
+            : [
+                {
+                    type: "action",
+                    id: "upload",
+                    label: "Upload Files",
+                    icon: (
+                        <Upload size={15} />
+                    ),
+                    onSelect: () =>
+                        handleUploadFiles(),
+                },
+                {
+                    type: "action",
+                    id: "new-folder",
+                    label: "New Folder",
+                    icon: (
+                        <FolderPlus size={15} />
+                    ),
+                    onSelect: () =>
+                        handleCreateFolder(),
+                },
+                {
+                    type: "action",
+                    id: "refresh",
+                    label: "Refresh",
+                    icon: (
+                        <RefreshCw size={15} />
+                    ),
+                    onSelect:
+                        loadDirectory,
+                },
+                {
+                    type: "separator",
+                    id: "path-separator",
+                },
+                {
+                    type: "action",
+                    id: "copy-path",
+                    label: "Copy Current Path",
+                    icon: (
+                        <Copy size={15} />
+                    ),
+                    onSelect: () =>
+                        handleCopyRemotePath(
+                            listing?.path ?? "",
+                        ),
+                },
+            ];
+
     return (
         <section className="sftp-remote-browser">
             <div className="sftp-remote-browser__toolbar">
@@ -1245,6 +1928,12 @@ export function RemoteFileBrowser({
                 aria-label="Remote files and folders"
                 onKeyDown={
                     handleKeyDown
+                }
+                onContextMenu={(event) =>
+                    handleContextMenuOpen(
+                        event,
+                        null,
+                    )
                 }
             >
                 {loading ? (
@@ -1417,6 +2106,12 @@ export function RemoteFileBrowser({
                                                 entry,
                                             )
                                         }
+                                        onContextMenu={(event) =>
+                                            handleContextMenuOpen(
+                                                event,
+                                                entry,
+                                            )
+                                        }
                                     >
                                         <td>
                                             <span
@@ -1484,6 +2179,103 @@ export function RemoteFileBrowser({
                     </span>
                 )}
             </footer>
+
+            {contextMenu && (
+                <FilePaneContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    ariaLabel="Remote file actions"
+                    items={
+                        contextMenuItems
+                    }
+                    onClose={() =>
+                        setContextMenu(null)
+                    }
+                />
+            )}
+
+            {detailsDialog && (
+                <FilePaneDetailsDialog
+                    subtitle={
+                        detailsDialog.entry.name
+                    }
+                    loading={
+                        detailsDialog.loading
+                    }
+                    error={
+                        detailsDialog.error
+                    }
+                    fields={[
+                        {
+                            label: "Name",
+                            value:
+                                detailsDialog.entry.name,
+                        },
+                        {
+                            label: "Type",
+                            value:
+                                getRemoteEntryTypeLabel(
+                                    detailsDialog.entry.type,
+                                ),
+                        },
+                        {
+                            label: "Remote path",
+                            value:
+                                detailsDialog.entry.path,
+                            path: true,
+                        },
+                        {
+                            label: "Size",
+                            value:
+                                detailsDialog.entry.type ===
+                                    "directory"
+                                    ? "—"
+                                    : `${formatFileSize(detailsDialog.entry.size)} · ${detailsDialog.entry.size.toLocaleString()} bytes`,
+                        },
+                        {
+                            label: "Modified",
+                            value:
+                                formatModifiedTime(
+                                    detailsDialog.entry.modifiedAt,
+                                ),
+                        },
+                        {
+                            label: "Permissions",
+                            value:
+                                detailsDialog.entry.permissions ??
+                                "—",
+                        },
+                        {
+                            label: "Owner UID",
+                            value:
+                                String(
+                                    detailsDialog.entry.uid ??
+                                    "—",
+                                ),
+                        },
+                        {
+                            label: "Group GID",
+                            value:
+                                String(
+                                    detailsDialog.entry.gid ??
+                                    "—",
+                                ),
+                        },
+                    ]}
+                    onClose={() =>
+                        setDetailsDialog(null)
+                    }
+                />
+            )}
+
+            {toastMessage && (
+                <div
+                    className="file-explorer-toast"
+                    role="status"
+                >
+                    {toastMessage}
+                </div>
+            )}
         </section>
     );
 }
