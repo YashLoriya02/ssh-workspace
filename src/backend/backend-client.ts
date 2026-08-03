@@ -722,8 +722,8 @@ export class BackendClient {
         localPath: string,
         remotePath: string,
         overwrite: boolean,
+        transferId: string = crypto.randomUUID(),
     ): Promise<string> {
-        const transferId = crypto.randomUUID();
 
         const response = await this.sendRequest(
             "transfer.upload",
@@ -751,8 +751,8 @@ export class BackendClient {
         connectionId: string,
         remotePath: string,
         localPath: string,
+        transferId: string = crypto.randomUUID(),
     ): Promise<string> {
-        const transferId = crypto.randomUUID();
 
         const response = await this.sendRequest(
             "transfer.download",

@@ -4971,7 +4971,6 @@ body.workspace-pane-resizing * {
     width: 32%;
   }
 }
-
 /* =========================================================
    SSH connection and disconnection journey
    ========================================================= */
@@ -4995,12 +4994,16 @@ body.workspace-pane-resizing * {
   border-radius: 12px;
 
   background:
-    radial-gradient(circle at 15% 0,
+    radial-gradient(
+      circle at 15% 0,
       var(--ssh-journey-soft),
-      transparent 35%),
-    linear-gradient(180deg,
+      transparent 35%
+    ),
+    linear-gradient(
+      180deg,
       rgba(20, 27, 39, 0.98),
-      rgba(13, 18, 27, 0.98));
+      rgba(13, 18, 27, 0.98)
+    );
 
   box-shadow:
     0 14px 36px rgba(0, 0, 0, 0.22),
@@ -5019,10 +5022,12 @@ body.workspace-pane-resizing * {
   height: 1px;
 
   background:
-    linear-gradient(90deg,
+    linear-gradient(
+      90deg,
       transparent,
       var(--ssh-journey-accent),
-      transparent);
+      transparent
+    );
 
   opacity: 0.6;
 
@@ -5104,11 +5109,14 @@ body.workspace-pane-resizing * {
     transform 280ms ease;
 }
 
-.ssh-journey--connected .ssh-journey__endpoint-icon {
+.ssh-journey--connected
+  .ssh-journey__endpoint-icon {
   transform: translateY(-1px);
 }
 
-.ssh-journey--failed .ssh-journey__endpoint--remote .ssh-journey__endpoint-icon {
+.ssh-journey--failed
+  .ssh-journey__endpoint--remote
+  .ssh-journey__endpoint-icon {
   animation:
     sshJourneyEndpointShake 380ms ease-in-out;
 }
@@ -5175,9 +5183,11 @@ body.workspace-pane-resizing * {
 
 .ssh-journey__route-progress {
   background:
-    linear-gradient(90deg,
+    linear-gradient(
+      90deg,
       rgba(115, 150, 255, 0.55),
-      var(--ssh-journey-accent));
+      var(--ssh-journey-accent)
+    );
 
   box-shadow:
     0 0 11px var(--ssh-journey-accent);
@@ -5221,7 +5231,8 @@ body.workspace-pane-resizing * {
   right: -3px;
 }
 
-.ssh-journey--connected .ssh-journey__route-node--end {
+.ssh-journey--connected
+  .ssh-journey__route-node--end {
   border-color: var(--ssh-journey-accent);
   background: var(--ssh-journey-accent);
 
@@ -5229,12 +5240,16 @@ body.workspace-pane-resizing * {
     0 0 10px var(--ssh-journey-accent);
 }
 
-.ssh-journey--failed .ssh-journey__route-progress,
-.ssh-journey--cancelled .ssh-journey__route-progress {
+.ssh-journey--failed
+  .ssh-journey__route-progress,
+.ssh-journey--cancelled
+  .ssh-journey__route-progress {
   background:
-    repeating-linear-gradient(90deg,
+    repeating-linear-gradient(
+      90deg,
       var(--ssh-journey-accent) 0 8px,
-      transparent 8px 13px);
+      transparent 8px 13px
+    );
 
   box-shadow: none;
 }
@@ -5288,9 +5303,11 @@ body.workspace-pane-resizing * {
   border-radius: 999px;
 
   background:
-    linear-gradient(90deg,
+    linear-gradient(
+      90deg,
       transparent,
-      var(--ssh-journey-accent));
+      var(--ssh-journey-accent)
+    );
 
   transform: translateY(-50%);
 }
@@ -5359,19 +5376,26 @@ body.workspace-pane-resizing * {
   font-size: 8px;
 }
 
-.ssh-journey--connected .ssh-journey__status-copy strong,
-.ssh-journey--connected .ssh-journey__status-icon {
+.ssh-journey--connected
+  .ssh-journey__status-copy strong,
+.ssh-journey--connected
+  .ssh-journey__status-icon {
   color: #79e3a1;
 }
 
-.ssh-journey--failed .ssh-journey__status-copy strong,
-.ssh-journey--failed .ssh-journey__status-icon,
-.ssh-journey--cancelled .ssh-journey__status-copy strong,
-.ssh-journey--cancelled .ssh-journey__status-icon {
+.ssh-journey--failed
+  .ssh-journey__status-copy strong,
+.ssh-journey--failed
+  .ssh-journey__status-icon,
+.ssh-journey--cancelled
+  .ssh-journey__status-copy strong,
+.ssh-journey--cancelled
+  .ssh-journey__status-icon {
   color: #ff999e;
 }
 
-.ssh-journey--disconnecting .ssh-journey__route-progress {
+.ssh-journey--disconnecting
+  .ssh-journey__route-progress {
   right: 0;
   left: auto;
 
@@ -5379,11 +5403,13 @@ body.workspace-pane-resizing * {
     sshJourneyRetract 1.15s ease-in-out both;
 }
 
-.ssh-journey--disconnected .ssh-journey__route-progress {
+.ssh-journey--disconnected
+  .ssh-journey__route-progress {
   width: 0 !important;
 }
 
-.ssh-journey--disconnected .ssh-journey__route-node--end {
+.ssh-journey--disconnected
+  .ssh-journey__route-node--end {
   border-color: #ed797f;
   background: #25171b;
 }
@@ -5460,7 +5486,6 @@ body.workspace-pane-resizing * {
 }
 
 @keyframes sshJourneyEndpointShake {
-
   0%,
   100% {
     transform: translateX(0);
@@ -5523,13 +5548,15 @@ body.workspace-pane-resizing * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .ssh-journey,
   .workspace-disconnection-overlay,
   .ssh-journey__packet::after,
   .ssh-journey__status-spinner,
-  .ssh-journey--failed .ssh-journey__endpoint--remote .ssh-journey__endpoint-icon,
-  .ssh-journey--disconnecting .ssh-journey__route-progress {
+  .ssh-journey--failed
+    .ssh-journey__endpoint--remote
+    .ssh-journey__endpoint-icon,
+  .ssh-journey--disconnecting
+    .ssh-journey__route-progress {
     animation: none !important;
   }
 
@@ -5585,54 +5612,61 @@ body.workspace-pane-resizing * {
   overflow: auto;
 
   background:
-    radial-gradient(circle at 50% 10%,
+    radial-gradient(
+      circle at 50% 10%,
       rgba(85, 116, 194, 0.16),
-      transparent 34%),
-    radial-gradient(circle at 16% 82%,
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 16% 82%,
       rgba(54, 82, 132, 0.1),
-      transparent 30%),
+      transparent 30%
+    ),
     #0e1117;
 }
 
 .ssh-journey-page--connected {
   background:
-    radial-gradient(circle at 50% 10%,
+    radial-gradient(
+      circle at 50% 10%,
       rgba(73, 175, 115, 0.15),
-      transparent 34%),
+      transparent 34%
+    ),
     #0e1117;
 }
 
 .ssh-journey-page--failed,
 .ssh-journey-page--cancelled {
   background:
-    radial-gradient(circle at 50% 10%,
+    radial-gradient(
+      circle at 50% 10%,
       rgba(180, 71, 79, 0.13),
-      transparent 34%),
+      transparent 34%
+    ),
     #0e1117;
 }
 
 .ssh-journey-page__content {
   display: grid;
 
-  width: min(850px, 100%);
+  width: min(820px, 100%);
   gap: 24px;
 
-  padding: 50px 100px;
+  padding: 34px;
 
+  border: 1px solid #293442;
   border-radius: 20px;
 
-  /* border: 1px solid #293442; */
-  
-  /* background:
+  background:
     linear-gradient(
       180deg,
       rgba(20, 25, 34, 0.98),
       rgba(14, 18, 25, 0.98)
-    ); */
+    );
 
-  /* box-shadow:
+  box-shadow:
     0 30px 90px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.035); */
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
 
   animation:
     sshJourneyPageAppear 320ms ease-out both;
@@ -5666,15 +5700,18 @@ body.workspace-pane-resizing * {
   text-transform: uppercase;
 }
 
-.ssh-journey-page--connected .ssh-journey-page__badge {
+.ssh-journey-page--connected
+  .ssh-journey-page__badge {
   border-color: rgba(105, 217, 149, 0.3);
 
   color: #86dfa7;
   background: rgba(57, 139, 88, 0.12);
 }
 
-.ssh-journey-page--failed .ssh-journey-page__badge,
-.ssh-journey-page--cancelled .ssh-journey-page__badge {
+.ssh-journey-page--failed
+  .ssh-journey-page__badge,
+.ssh-journey-page--cancelled
+  .ssh-journey-page__badge {
   border-color: rgba(237, 121, 127, 0.3);
 
   color: #ef9aa0;
@@ -5710,51 +5747,62 @@ body.workspace-pane-resizing * {
   border-radius: 16px;
 }
 
-.ssh-journey--page-card .ssh-journey__endpoint-icon {
+.ssh-journey--page-card
+  .ssh-journey__endpoint-icon {
   width: 48px;
   height: 48px;
 
   border-radius: 13px;
 }
 
-.ssh-journey--page-card .ssh-journey__endpoint-copy strong {
+.ssh-journey--page-card
+  .ssh-journey__endpoint-copy strong {
   font-size: 13px;
 }
 
-.ssh-journey--page-card .ssh-journey__endpoint-copy small {
+.ssh-journey--page-card
+  .ssh-journey__endpoint-copy small {
   font-size: 9px;
 }
 
-.ssh-journey--page-card .ssh-journey__route {
+.ssh-journey--page-card
+  .ssh-journey__route {
   height: 30px;
 
   margin: 0 23px;
 }
 
-.ssh-journey--page-card .ssh-journey__route-base,
-.ssh-journey--page-card .ssh-journey__route-progress {
+.ssh-journey--page-card
+  .ssh-journey__route-base,
+.ssh-journey--page-card
+  .ssh-journey__route-progress {
   height: 3px;
 }
 
-.ssh-journey--page-card .ssh-journey__route-node {
+.ssh-journey--page-card
+  .ssh-journey__route-node {
   width: 10px;
   height: 10px;
 }
 
-.ssh-journey--page-card .ssh-journey__packet {
+.ssh-journey--page-card
+  .ssh-journey__packet {
   width: 15px;
   height: 15px;
 }
 
-.ssh-journey--page-card .ssh-journey__status-row {
+.ssh-journey--page-card
+  .ssh-journey__status-row {
   align-items: flex-start;
 }
 
-.ssh-journey--page-card .ssh-journey__status-copy {
+.ssh-journey--page-card
+  .ssh-journey__status-copy {
   max-width: 610px;
 }
 
-.ssh-journey--page-card .ssh-journey__status-copy strong {
+.ssh-journey--page-card
+  .ssh-journey__status-copy strong {
   overflow: visible;
 
   font-size: 12px;
@@ -5764,7 +5812,8 @@ body.workspace-pane-resizing * {
   white-space: normal;
 }
 
-.ssh-journey--page-card .ssh-journey__status-copy small {
+.ssh-journey--page-card
+  .ssh-journey__status-copy small {
   font-size: 9px;
   line-height: 1.45;
 }
@@ -5855,20 +5904,24 @@ body.workspace-pane-resizing * {
     padding: 20px 14px;
   }
 
-  .ssh-journey--page-card .ssh-journey__endpoints {
+  .ssh-journey--page-card
+    .ssh-journey__endpoints {
     gap: 10px;
   }
 
-  .ssh-journey--page-card .ssh-journey__endpoint {
+  .ssh-journey--page-card
+    .ssh-journey__endpoint {
     max-width: 49%;
   }
 
-  .ssh-journey--page-card .ssh-journey__endpoint-icon {
+  .ssh-journey--page-card
+    .ssh-journey__endpoint-icon {
     width: 40px;
     height: 40px;
   }
 
-  .ssh-journey--page-card .ssh-journey__route {
+  .ssh-journey--page-card
+    .ssh-journey__route {
     margin: 0 17px;
   }
 
@@ -5879,5 +5932,993 @@ body.workspace-pane-resizing * {
 
   .ssh-journey-page__actions button {
     width: 100%;
+  }
+}
+
+/* =========================================================
+   SFTP cross-pane transfer foundation
+   ========================================================= */
+
+.sftp-transfer-plan-panel {
+  position: fixed;
+  z-index: 260;
+  right: 18px;
+  bottom: 18px;
+
+  width: min(520px, calc(100vw - 36px));
+
+  overflow: hidden;
+
+  border: 1px solid #394658;
+  border-radius: 12px;
+
+  color: #d9e1ed;
+  background:
+    rgba(19, 24, 32, 0.98);
+
+  box-shadow:
+    0 20px 55px
+    rgba(0, 0, 0, 0.48);
+
+  backdrop-filter: blur(12px);
+}
+
+.sftp-transfer-plan-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-height: 42px;
+
+  gap: 12px;
+  padding: 0 10px 0 12px;
+
+  border-bottom: 1px solid #2c3542;
+
+  background: #181e27;
+}
+
+.sftp-transfer-plan-panel__header > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+
+  gap: 8px;
+}
+
+.sftp-transfer-plan-panel__header strong {
+  font-size: 11px;
+}
+
+.sftp-transfer-plan-panel__header div > span {
+  display: inline-grid;
+
+  min-width: 20px;
+  height: 20px;
+
+  place-items: center;
+
+  border: 1px solid #3d4c60;
+  border-radius: 999px;
+
+  color: #9fb3d6;
+  background: #202a38;
+
+  font-size: 9px;
+}
+
+.sftp-transfer-plan-panel__header button {
+  height: 27px;
+
+  padding: 0 8px;
+
+  border-color: #394555;
+  border-radius: 6px;
+
+  color: #9da9ba;
+  background: #202630;
+
+  font-size: 9px;
+}
+
+.sftp-transfer-plan-list {
+  display: grid;
+
+  max-height: 270px;
+
+  overflow-y: auto;
+}
+
+.sftp-transfer-plan {
+  display: grid;
+  grid-template-columns:
+    auto minmax(0, 1fr) auto;
+
+  align-items: flex-start;
+
+  gap: 9px;
+  padding: 10px 9px 10px 12px;
+
+  border-bottom: 1px solid #272f3a;
+}
+
+.sftp-transfer-plan:last-child {
+  border-bottom: 0;
+}
+
+.sftp-transfer-plan__status-icon {
+  display: grid;
+
+  width: 26px;
+  height: 26px;
+
+  place-items: center;
+
+  border: 1px solid #3d4c60;
+  border-radius: 8px;
+
+  color: #8aaef0;
+  background: #1e2a3b;
+}
+
+.sftp-transfer-plan--blocked
+  .sftp-transfer-plan__status-icon {
+  border-color: #68434a;
+
+  color: #ffaaa9;
+  background: #321f23;
+}
+
+.sftp-transfer-plan__content {
+  display: grid;
+
+  min-width: 0;
+  gap: 5px;
+}
+
+.sftp-transfer-plan__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-width: 0;
+  gap: 10px;
+}
+
+.sftp-transfer-plan__title-row strong {
+  overflow: hidden;
+
+  color: #e3e8f0;
+
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-transfer-plan__title-row > span {
+  flex: 0 0 auto;
+
+  padding: 3px 6px;
+
+  border: 1px solid #365243;
+  border-radius: 999px;
+
+  color: #82dba0;
+  background: #192b21;
+
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.sftp-transfer-plan--blocked
+  .sftp-transfer-plan__title-row > span {
+  border-color: #68434a;
+
+  color: #f3a0a0;
+  background: #321f23;
+}
+
+.sftp-transfer-plan__route {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto minmax(0, 1fr);
+
+  align-items: center;
+
+  min-width: 0;
+  gap: 6px;
+
+  color: #8b99ab;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 8px;
+}
+
+.sftp-transfer-plan__route span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-transfer-plan__route span:last-child {
+  text-align: right;
+}
+
+.sftp-transfer-plan__content p {
+  margin: 0;
+
+  color: #707d8f;
+
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.sftp-transfer-plan__dismiss {
+  display: grid;
+
+  width: 25px;
+  height: 25px;
+
+  place-items: center;
+
+  padding: 0;
+
+  border: 0;
+  border-radius: 6px;
+
+  color: #758195;
+  background: transparent;
+}
+
+.sftp-transfer-plan__dismiss:hover:not(:disabled) {
+  color: #e5ebf4;
+  background: #29323f;
+}
+
+@media (max-width: 650px) {
+  .sftp-transfer-plan-panel {
+    right: 10px;
+    bottom: 10px;
+
+    width: calc(100vw - 20px);
+  }
+
+  .sftp-transfer-plan__route {
+    grid-template-columns: 1fr;
+  }
+
+  .sftp-transfer-plan__route svg {
+    display: none;
+  }
+
+  .sftp-transfer-plan__route span:last-child {
+    text-align: left;
+  }
+}
+
+/* =========================================================
+   SFTP single-file transfer execution states
+   ========================================================= */
+
+.sftp-transfer-plan--prepared
+  .sftp-transfer-plan__status-icon,
+.sftp-transfer-plan--running
+  .sftp-transfer-plan__status-icon {
+  border-color: #3f5678;
+
+  color: #9dbdff;
+  background: #1c2a40;
+}
+
+.sftp-transfer-plan--completed
+  .sftp-transfer-plan__status-icon {
+  border-color: #365c44;
+
+  color: #83dfa2;
+  background: #192d21;
+}
+
+.sftp-transfer-plan--failed
+  .sftp-transfer-plan__status-icon,
+.sftp-transfer-plan--blocked
+  .sftp-transfer-plan__status-icon {
+  border-color: #68434a;
+
+  color: #ffaaa9;
+  background: #321f23;
+}
+
+.sftp-transfer-plan--prepared
+  .sftp-transfer-plan__title-row > span,
+.sftp-transfer-plan--running
+  .sftp-transfer-plan__title-row > span {
+  border-color: #405879;
+
+  color: #a7c3f8;
+  background: #1d2b40;
+}
+
+.sftp-transfer-plan--completed
+  .sftp-transfer-plan__title-row > span {
+  border-color: #365243;
+
+  color: #82dba0;
+  background: #192b21;
+}
+
+.sftp-transfer-plan--failed
+  .sftp-transfer-plan__title-row > span,
+.sftp-transfer-plan--blocked
+  .sftp-transfer-plan__title-row > span {
+  border-color: #68434a;
+
+  color: #f3a0a0;
+  background: #321f23;
+}
+
+.sftp-transfer-plan--running {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(63, 86, 120, 0.12),
+      transparent 58%
+    );
+}
+
+.sftp-transfer-plan--completed {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(54, 92, 68, 0.1),
+      transparent 58%
+    );
+}
+
+.sftp-transfer-plan--failed,
+.sftp-transfer-plan--blocked {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(104, 67, 74, 0.1),
+      transparent 58%
+    );
+}
+
+/* =========================================================
+   SFTP transfer progress, speed and cancellation
+   ========================================================= */
+
+.sftp-transfer-plan--cancelling
+  .sftp-transfer-plan__status-icon {
+  border-color: #665638;
+
+  color: #efc56f;
+  background: #302919;
+}
+
+.sftp-transfer-plan--cancelled
+  .sftp-transfer-plan__status-icon {
+  border-color: #4a5361;
+
+  color: #a1acba;
+  background: #222832;
+}
+
+.sftp-transfer-plan--cancelling
+  .sftp-transfer-plan__title-row > span {
+  border-color: #665638;
+
+  color: #efc56f;
+  background: #302919;
+}
+
+.sftp-transfer-plan--cancelled
+  .sftp-transfer-plan__title-row > span {
+  border-color: #4a5361;
+
+  color: #a1acba;
+  background: #222832;
+}
+
+.sftp-transfer-plan--cancelling {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(128, 101, 50, 0.13),
+      transparent 58%
+    );
+}
+
+.sftp-transfer-plan--cancelled {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(75, 84, 98, 0.1),
+      transparent 58%
+    );
+}
+
+.sftp-transfer-progress {
+  display: grid;
+
+  min-width: 0;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.sftp-transfer-progress__track {
+  position: relative;
+
+  width: 100%;
+  height: 5px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background: #252d38;
+}
+
+.sftp-transfer-progress__track > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+
+  min-width: 0;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #557ec4,
+      #83a9ed
+    );
+
+  box-shadow:
+    0 0 9px
+    rgba(112, 157, 234, 0.42);
+
+  transition:
+    width 120ms linear;
+}
+
+.sftp-transfer-plan--running
+  .sftp-transfer-progress__track > span::after {
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.34),
+      transparent
+    );
+
+  content: "";
+
+  animation:
+    sftp-transfer-progress-shimmer
+    1.25s linear infinite;
+}
+
+.sftp-transfer-plan--completed
+  .sftp-transfer-progress__track > span {
+  background:
+    linear-gradient(
+      90deg,
+      #4ba86a,
+      #78d897
+    );
+
+  box-shadow:
+    0 0 9px
+    rgba(96, 203, 129, 0.38);
+}
+
+.sftp-transfer-plan--cancelling
+  .sftp-transfer-progress__track > span {
+  background:
+    linear-gradient(
+      90deg,
+      #967532,
+      #d6af5f
+    );
+
+  box-shadow:
+    0 0 8px
+    rgba(214, 175, 95, 0.3);
+}
+
+.sftp-transfer-plan--failed
+  .sftp-transfer-progress__track > span {
+  background:
+    linear-gradient(
+      90deg,
+      #a34d59,
+      #dc7780
+    );
+
+  box-shadow: none;
+}
+
+.sftp-transfer-plan--cancelled
+  .sftp-transfer-progress__track > span {
+  background: #6f7a89;
+
+  box-shadow: none;
+}
+
+.sftp-transfer-progress__stats {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) auto auto;
+
+  align-items: center;
+
+  min-width: 0;
+  gap: 8px;
+
+  color: #778496;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 8px;
+}
+
+.sftp-transfer-progress__stats span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-transfer-progress__stats strong {
+  color: #a9bce0;
+
+  font-size: 8px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.sftp-transfer-plan__cancel {
+  display: grid;
+
+  width: 25px;
+  height: 25px;
+
+  place-items: center;
+
+  padding: 0;
+
+  border: 1px solid #59454a;
+  border-radius: 6px;
+
+  color: #e69ba1;
+  background: #2d2024;
+}
+
+.sftp-transfer-plan__cancel:hover:not(:disabled) {
+  border-color: #8b535b;
+
+  color: #ffc1c5;
+  background: #42262c;
+}
+
+.sftp-transfer-plan__cancel:disabled {
+  border-color: #5f543c;
+
+  color: #d6b66e;
+  background: #302919;
+
+  opacity: 1;
+}
+
+@keyframes sftp-transfer-progress-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 650px) {
+  .sftp-transfer-progress__stats {
+    grid-template-columns:
+      minmax(0, 1fr) auto;
+  }
+
+  .sftp-transfer-progress__stats span:nth-child(2) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sftp-transfer-progress__track > span {
+    transition: none;
+  }
+
+  .sftp-transfer-plan--running
+    .sftp-transfer-progress__track > span::after {
+    animation: none;
+  }
+}
+
+/* =========================================================
+   SFTP recursive transfers and overwrite conflicts
+   ========================================================= */
+
+.sftp-transfer-plan--waiting-for-conflict
+  .sftp-transfer-plan__status-icon,
+.sftp-transfer-plan--waiting-for-conflict
+  .sftp-transfer-plan__title-row > span {
+  border-color: #735f36;
+
+  color: #f0c975;
+  background: #332b1c;
+}
+
+.sftp-transfer-plan--waiting-for-conflict {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(132, 101, 48, 0.15),
+      transparent 58%
+    );
+}
+
+.sftp-transfer-plan--waiting-for-conflict
+  .sftp-transfer-progress__track > span {
+  background:
+    linear-gradient(
+      90deg,
+      #9b7938,
+      #d8b45f
+    );
+
+  box-shadow:
+    0 0 8px
+    rgba(216, 180, 95, 0.28);
+}
+
+.sftp-transfer-plan--completed-with-errors
+  .sftp-transfer-plan__status-icon,
+.sftp-transfer-plan--completed-with-errors
+  .sftp-transfer-plan__title-row > span {
+  border-color: #765f34;
+
+  color: #efc46d;
+  background: #332a1a;
+}
+
+.sftp-transfer-plan--completed-with-errors {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(128, 94, 43, 0.12),
+      transparent 58%
+    );
+}
+
+.sftp-transfer-plan--completed-with-errors
+  .sftp-transfer-progress__track > span {
+  background:
+    linear-gradient(
+      90deg,
+      #9e7834,
+      #d6ad58
+    );
+
+  box-shadow: none;
+}
+
+.sftp-transfer-plan__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+
+  gap: 5px;
+}
+
+.sftp-transfer-plan__summary span {
+  padding: 2px 5px;
+
+  border: 1px solid #303946;
+  border-radius: 999px;
+
+  color: #8090a4;
+  background: #171c23;
+
+  font-size: 8px;
+}
+
+.sftp-conflict-backdrop {
+  position: fixed;
+  z-index: 400;
+  inset: 0;
+
+  display: grid;
+  place-items: center;
+
+  padding: 24px;
+
+  background: rgba(5, 8, 12, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.sftp-conflict-dialog {
+  width: min(620px, 100%);
+  overflow: hidden;
+
+  border: 1px solid #455164;
+  border-radius: 14px;
+
+  color: #dbe2ec;
+  background: #151a22;
+
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.58);
+}
+
+.sftp-conflict-dialog__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+
+  gap: 12px;
+  padding: 18px 18px 15px;
+
+  border-bottom: 1px solid #2b333f;
+  background: #1a2029;
+}
+
+.sftp-conflict-dialog__warning {
+  display: grid;
+
+  width: 38px;
+  height: 38px;
+
+  place-items: center;
+
+  border: 1px solid #6b5834;
+  border-radius: 10px;
+
+  color: #efc46d;
+  background: #31291a;
+}
+
+.sftp-conflict-dialog__header h2 {
+  margin: 0;
+
+  color: #f1f4f8;
+
+  font-size: 16px;
+}
+
+.sftp-conflict-dialog__header p {
+  margin: 3px 0 0;
+
+  color: #778395;
+
+  font-size: 10px;
+}
+
+.sftp-conflict-dialog__close {
+  display: grid;
+
+  width: 30px;
+  height: 30px;
+
+  place-items: center;
+
+  padding: 0;
+
+  border: 0;
+  border-radius: 7px;
+
+  color: #8490a1;
+  background: transparent;
+}
+
+.sftp-conflict-dialog__close:hover:not(:disabled) {
+  color: #f3f5f8;
+  background: #2b3441;
+}
+
+.sftp-conflict-dialog__body {
+  display: grid;
+
+  gap: 16px;
+  padding: 18px;
+}
+
+.sftp-conflict-dialog__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+
+  gap: 12px;
+}
+
+.sftp-conflict-dialog__item > span {
+  display: grid;
+
+  width: 40px;
+  height: 40px;
+
+  place-items: center;
+
+  border: 1px solid #394557;
+  border-radius: 10px;
+
+  color: #9eb8e6;
+  background: #202a38;
+}
+
+.sftp-conflict-dialog__item strong {
+  display: block;
+  overflow: hidden;
+
+  color: #edf1f6;
+
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-conflict-dialog__item p {
+  margin: 4px 0 0;
+
+  color: #8995a6;
+
+  font-size: 11px;
+}
+
+.sftp-conflict-dialog__paths {
+  display: grid;
+
+  gap: 9px;
+  margin: 0;
+}
+
+.sftp-conflict-dialog__paths > div {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+
+  gap: 10px;
+}
+
+.sftp-conflict-dialog__paths dt {
+  padding-top: 7px;
+
+  color: #697689;
+
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sftp-conflict-dialog__paths dd {
+  display: grid;
+
+  min-width: 0;
+  gap: 3px;
+  margin: 0;
+  padding: 7px 9px;
+
+  border: 1px solid #2e3744;
+  border-radius: 8px;
+
+  background: #10151c;
+}
+
+.sftp-conflict-dialog__paths dd strong,
+.sftp-conflict-dialog__paths dd span {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-conflict-dialog__paths dd strong {
+  color: #9eabc0;
+
+  font-size: 9px;
+}
+
+.sftp-conflict-dialog__paths dd span {
+  color: #c6ceda;
+
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+}
+
+.sftp-conflict-dialog__note {
+  margin: 0;
+  padding: 9px 10px;
+
+  border: 1px solid #4e4632;
+  border-radius: 8px;
+
+  color: #c7af78;
+  background: #272318;
+
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.sftp-conflict-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  gap: 8px;
+  padding: 14px 18px 17px;
+
+  border-top: 1px solid #2b333f;
+  background: #12171e;
+}
+
+.sftp-conflict-dialog__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 34px;
+
+  gap: 7px;
+  padding: 0 13px;
+
+  font-size: 10px;
+}
+
+.sftp-conflict-dialog__secondary {
+  color: #b8c2d0;
+  background: #222a35;
+}
+
+.sftp-conflict-dialog__replace {
+  border-color: #526f9b;
+
+  color: #e9f0ff;
+  background: #304a70;
+}
+
+.sftp-conflict-dialog__replace:hover:not(:disabled) {
+  border-color: #6f91c5;
+
+  background: #3d5d8c;
+}
+
+@media (max-width: 620px) {
+  .sftp-conflict-backdrop {
+    align-items: end;
+
+    padding: 12px;
+  }
+
+  .sftp-conflict-dialog__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sftp-conflict-dialog__actions button:first-child {
+    grid-column: 1 / -1;
   }
 }

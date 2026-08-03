@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useRef,
     useState,
@@ -12,12 +13,12 @@ import {
 } from "lucide-react";
 
 import {
-    homeDir,
-} from "@tauri-apps/api/path";
-
-import {
     open as openDialog,
 } from "@tauri-apps/plugin-dialog";
+
+import {
+    homeDir,
+} from "@tauri-apps/api/path";
 
 import {
     SftpPane,
@@ -29,9 +30,30 @@ import type {
     SftpServerOption,
 } from "./sftp-types";
 
+import type {
+    PreparedSftpTransfer,
+    SftpTransferEntry,
+} from "./transfers/sftp-transfer-types";
+
+import {
+    getOppositePaneSide,
+} from "./transfers/transfer-path-utils";
+
+import {
+    useSftpTransferManager,
+} from "./transfers/useSftpTransferManager";
+
+import {
+    SftpTransferPanel,
+} from "./transfers/SftpTransferPanel";
+
+import {
+    SftpConflictDialog,
+} from "./transfers/SftpConflictDialog";
+
 interface SftpWorkspacePageProps {
     servers:
-    readonly SftpServerOption[];
+        readonly SftpServerOption[];
 
     onDisconnectServer: (
         connectionId: string,
@@ -95,9 +117,50 @@ export function SftpWorkspacePage({
         setErrorMessage,
     ] = useState("");
 
+    const [
+        paneRefreshVersions,
+        setPaneRefreshVersions,
+    ] = useState<Record<SftpPaneSide, number>>({
+        left: 0,
+        right: 0,
+    });
+
+    const handleTransferCompleted =
+        useCallback(
+            (
+                transfer:
+                    PreparedSftpTransfer,
+            ): void => {
+                const destinationSide =
+                    transfer.destination?.side;
+
+                if (!destinationSide) {
+                    return;
+                }
+
+                setPaneRefreshVersions(
+                    (
+                        currentVersions,
+                    ) => ({
+                        ...currentVersions,
+                        [destinationSide]:
+                            currentVersions[
+                                destinationSide
+                            ] + 1,
+                    }),
+                );
+            },
+            [],
+        );
+
+    const transferManager =
+        useSftpTransferManager({
+            onTransferCompleted:
+                handleTransferCompleted,
+        });
+
     useEffect(() => {
-        let disposed =
-            false;
+        let disposed = false;
 
         void homeDir()
             .then(
@@ -114,7 +177,7 @@ export function SftpWorkspacePage({
                         ) =>
                             currentSource.type ===
                                 "local" &&
-                                !currentSource.path
+                            !currentSource.path
                                 ? {
                                     type:
                                         "local",
@@ -148,8 +211,7 @@ export function SftpWorkspacePage({
             );
 
         return () => {
-            disposed =
-                true;
+            disposed = true;
         };
     }, []);
 
@@ -170,9 +232,9 @@ export function SftpWorkspacePage({
             (currentSource) =>
                 currentSource.type ===
                     "remote" &&
-                    !activeConnectionIds.has(
-                        currentSource.connectionId,
-                    )
+                !activeConnectionIds.has(
+                    currentSource.connectionId,
+                )
                     ? {
                         type: "empty",
                     }
@@ -183,9 +245,9 @@ export function SftpWorkspacePage({
             (currentSource) =>
                 currentSource.type ===
                     "remote" &&
-                    !activeConnectionIds.has(
-                        currentSource.connectionId,
-                    )
+                !activeConnectionIds.has(
+                    currentSource.connectionId,
+                )
                     ? {
                         type: "empty",
                     }
@@ -204,21 +266,34 @@ export function SftpWorkspacePage({
         };
     }, []);
 
+    function setSourceForSide(
+        side: SftpPaneSide,
+        source: SftpPaneSource,
+    ): void {
+        if (side === "left") {
+            setLeftSource(source);
+        } else {
+            setRightSource(source);
+        }
+    }
+
+    function getSourceForSide(
+        side: SftpPaneSide,
+    ): SftpPaneSource {
+        return side === "left"
+            ? leftSource
+            : rightSource;
+    }
+
     function updateSource(
         side: SftpPaneSide,
         source: SftpPaneSource,
     ): void {
         setErrorMessage("");
-
-        if (side === "left") {
-            setLeftSource(
-                source,
-            );
-        } else {
-            setRightSource(
-                source,
-            );
-        }
+        setSourceForSide(
+            side,
+            source,
+        );
 
         /*
          * Selecting Local Computer from either dropdown
@@ -238,26 +313,24 @@ export function SftpWorkspacePage({
                 ) => {
                     const resolvedSource:
                         SftpPaneSource = {
-                        type:
-                            "local",
+                            type:
+                                "local",
 
-                        rootPath:
-                            localHomePath,
+                            rootPath:
+                                localHomePath,
 
-                        path:
-                            localHomePath,
-                    };
+                            path:
+                                localHomePath,
+                        };
 
-                    if (
-                        side === "left"
-                    ) {
+                    if (side === "left") {
                         setLeftSource(
                             (
                                 currentSource,
                             ) =>
                                 currentSource.type ===
                                     "local" &&
-                                    !currentSource.path
+                                !currentSource.path
                                     ? resolvedSource
                                     : currentSource,
                         );
@@ -268,7 +341,7 @@ export function SftpWorkspacePage({
                             ) =>
                                 currentSource.type ===
                                     "local" &&
-                                    !currentSource.path
+                                !currentSource.path
                                     ? resolvedSource
                                     : currentSource,
                         );
@@ -331,8 +404,12 @@ export function SftpWorkspacePage({
                 side,
                 {
                     type: "local",
-                    rootPath: selectedPath,
-                    path: selectedPath,
+
+                    rootPath:
+                        selectedPath,
+
+                    path:
+                        selectedPath,
                 },
             );
         } catch (error) {
@@ -358,7 +435,7 @@ export function SftpWorkspacePage({
                 (currentSource) =>
                     currentSource.type ===
                         "remote" &&
-                        currentSource.connectionId ===
+                    currentSource.connectionId ===
                         connectionId
                         ? {
                             type: "empty",
@@ -370,7 +447,7 @@ export function SftpWorkspacePage({
                 (currentSource) =>
                     currentSource.type ===
                         "remote" &&
-                        currentSource.connectionId ===
+                    currentSource.connectionId ===
                         connectionId
                         ? {
                             type: "empty",
@@ -386,6 +463,33 @@ export function SftpWorkspacePage({
 
             throw error;
         }
+    }
+
+    function handleCopyToOtherPane(
+        sourceSide: SftpPaneSide,
+        entry: SftpTransferEntry,
+    ): void {
+        const destinationSide =
+            getOppositePaneSide(
+                sourceSide,
+            );
+
+        transferManager.prepareCopy({
+            sourceSide,
+            source:
+                getSourceForSide(
+                    sourceSide,
+                ),
+            destinationSide,
+            destination:
+                getSourceForSide(
+                    destinationSide,
+                ),
+            entries: [entry],
+            trigger:
+                "context-menu",
+            servers,
+        });
     }
 
     function swapPanes(): void {
@@ -544,9 +648,7 @@ export function SftpWorkspacePage({
         event:
             ReactPointerEvent<HTMLDivElement>,
     ): void {
-        if (
-            !isResizingRef.current
-        ) {
+        if (!isResizingRef.current) {
             return;
         }
 
@@ -597,18 +699,12 @@ export function SftpWorkspacePage({
     ): void {
         let difference = 0;
 
-        if (
-            event.key ===
-            "ArrowLeft"
-        ) {
+        if (event.key === "ArrowLeft") {
             difference =
                 -SFTP_KEYBOARD_RESIZE_STEP;
         }
 
-        if (
-            event.key ===
-            "ArrowRight"
-        ) {
+        if (event.key === "ArrowRight") {
             difference =
                 SFTP_KEYBOARD_RESIZE_STEP;
         }
@@ -656,9 +752,7 @@ export function SftpWorkspacePage({
                 <button
                     type="button"
                     className="sftp-swap-button"
-                    onClick={
-                        swapPanes
-                    }
+                    onClick={swapPanes}
                     title="Swap left and right pane sources"
                 >
                     <ArrowLeftRight
@@ -675,6 +769,38 @@ export function SftpWorkspacePage({
                     {errorMessage}
                 </div>
             )}
+
+            <SftpTransferPanel
+                transfers={
+                    transferManager
+                        .preparedTransfers
+                }
+                onCancel={(
+                    transferId,
+                ) => {
+                    void transferManager
+                        .cancelPreparedTransfer(
+                            transferId,
+                        );
+                }}
+                onDismiss={
+                    transferManager
+                        .dismissPreparedTransfer
+                }
+                onClear={
+                    transferManager
+                        .clearPreparedTransfers
+                }
+            />
+
+            <SftpConflictDialog
+                conflict={
+                    transferManager.pendingConflict
+                }
+                onDecision={
+                    transferManager.resolveConflict
+                }
+            />
 
             <section
                 ref={gridRef}
@@ -696,12 +822,11 @@ export function SftpWorkspacePage({
             >
                 <SftpPane
                     side="left"
-                    source={
-                        leftSource
+                    source={leftSource}
+                    refreshVersion={
+                        paneRefreshVersions.left
                     }
-                    servers={
-                        servers
-                    }
+                    servers={servers}
                     onSourceChange={(
                         source,
                     ) =>
@@ -722,6 +847,14 @@ export function SftpWorkspacePage({
                     }
                     onDisconnectServer={
                         disconnectServer
+                    }
+                    onCopyToOtherPane={(
+                        entry,
+                    ) =>
+                        handleCopyToOtherPane(
+                            "left",
+                            entry,
+                        )
                     }
                 />
 
@@ -771,12 +904,11 @@ export function SftpWorkspacePage({
 
                 <SftpPane
                     side="right"
-                    source={
-                        rightSource
+                    source={rightSource}
+                    refreshVersion={
+                        paneRefreshVersions.right
                     }
-                    servers={
-                        servers
-                    }
+                    servers={servers}
                     onSourceChange={(
                         source,
                     ) =>
@@ -797,6 +929,14 @@ export function SftpWorkspacePage({
                     }
                     onDisconnectServer={
                         disconnectServer
+                    }
+                    onCopyToOtherPane={(
+                        entry,
+                    ) =>
+                        handleCopyToOtherPane(
+                            "right",
+                            entry,
+                        )
                     }
                 />
             </section>

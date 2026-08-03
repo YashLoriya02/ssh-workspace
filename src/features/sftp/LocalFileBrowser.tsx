@@ -58,6 +58,10 @@ import {
     confirm as confirmDialog,
 } from "@tauri-apps/plugin-dialog";
 
+import type {
+    SftpTransferEntry,
+} from "./transfers/sftp-transfer-types";
+
 type LocalEntryType =
     | "file"
     | "directory"
@@ -97,6 +101,10 @@ interface LocalFileBrowserProps {
 
     onChooseFolder:
     () => Promise<void>;
+
+    onCopyToOtherPane: (
+        entry: SftpTransferEntry,
+    ) => void;
 }
 
 type LocalSortKey =
@@ -499,6 +507,7 @@ export function LocalFileBrowser({
     refreshVersion,
     onPathChange,
     onChooseFolder,
+    onCopyToOtherPane,
 }: LocalFileBrowserProps) {
     const [
         entries,
@@ -1309,11 +1318,15 @@ export function LocalFileBrowser({
         }
     }
 
-    function handleCopyToOtherPane():
-        void {
-        showToast(
-            "Copy to Other Pane will be available in the next transfer milestone.",
-        );
+    function handleCopyToOtherPane(
+        entry: LocalFileEntry,
+    ): void {
+        onCopyToOtherPane({
+            name: entry.name,
+            path: entry.path,
+            type: entry.type,
+            size: entry.size,
+        });
     }
 
     async function handleRevealPath(
@@ -1414,26 +1427,12 @@ export function LocalFileBrowser({
                 [
                     isDirectory
                         ? `Delete folder "${entry.name}" and all of its contents?`
-                        : `Delete file "${entry.name}"?`,
-
+                        : `Delete "${entry.name}"?`,
                     "",
-
-                    isDirectory
-                        ? "The folder and everything inside it will be permanently deleted."
-                        : "This file will be permanently deleted.",
-
+                    "This action cannot be undone.",
                     "",
-
                     entry.path,
                 ].join("\n"),
-                {
-                    title:
-                        isDirectory
-                            ? "Delete local folder?"
-                            : "Delete local file?",
-
-                    kind: "warning",
-                },
             );
 
         if (!confirmed) {
@@ -1685,9 +1684,11 @@ export function LocalFileBrowser({
                     icon: (
                         <ArrowLeftRight size={15} />
                     ),
-                    onSelect:
-                        handleCopyToOtherPane,
-                    hint: "Soon",
+                    onSelect: () =>
+                        handleCopyToOtherPane(
+                            contextMenu.entry!,
+                        ),
+                    hint: "Plan",
                 },
                 {
                     type: "separator",

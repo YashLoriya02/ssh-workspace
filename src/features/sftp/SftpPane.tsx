@@ -29,11 +29,16 @@ import {
     RemoteFileBrowser,
 } from "./RemoteFileBrowser";
 
+import type {
+    SftpTransferEntry,
+} from "./transfers/sftp-transfer-types";
+
 interface SftpPaneProps {
     side: SftpPaneSide;
 
     source: SftpPaneSource;
     servers: readonly SftpServerOption[];
+    refreshVersion: number;
 
     onSourceChange: (
         source: SftpPaneSource,
@@ -47,6 +52,10 @@ interface SftpPaneProps {
     onDisconnectServer: (
         connectionId: string,
     ) => Promise<void>;
+
+    onCopyToOtherPane: (
+        entry: SftpTransferEntry,
+    ) => void;
 
     /*
      * This will be provided when the actual
@@ -69,10 +78,12 @@ export function SftpPane({
     side,
     source,
     servers,
+    refreshVersion,
     onSourceChange,
     onChooseLocalFolder,
     onClear,
     onDisconnectServer,
+    onCopyToOtherPane,
     // onRefresh,
 }: SftpPaneProps) {
     const [
@@ -601,7 +612,8 @@ export function SftpPane({
                                 source.path
                             }
                             refreshVersion={
-                                localRefreshVersion
+                                localRefreshVersion +
+                                refreshVersion
                             }
                             onPathChange={(
                                 nextPath,
@@ -614,6 +626,9 @@ export function SftpPane({
                             }
                             onChooseFolder={
                                 onChooseLocalFolder
+                            }
+                            onCopyToOtherPane={
+                                onCopyToOtherPane
                             }
                         />
                     ) : (
@@ -665,7 +680,8 @@ export function SftpPane({
                                     source.path
                                 }
                                 refreshVersion={
-                                    remoteRefreshVersion
+                                    remoteRefreshVersion +
+                                    refreshVersion
                                 }
                                 onPathChange={(
                                     nextPath,
@@ -676,6 +692,9 @@ export function SftpPane({
                                         path:
                                             nextPath,
                                     })
+                                }
+                                onCopyToOtherPane={
+                                    onCopyToOtherPane
                                 }
                             />
                         ) : (

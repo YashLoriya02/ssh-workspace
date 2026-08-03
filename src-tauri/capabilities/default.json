@@ -21,13 +21,16 @@
     "shell:allow-kill",
     "dialog:default",
     "store:default",
-
     "fs:default",
     "fs:allow-read-dir",
     "fs:allow-lstat",
     "fs:allow-mkdir",
     "fs:allow-rename",
     "fs:allow-remove",
+    "fs:allow-copy-file",
+    "fs:allow-exists",
+    "fs:read-files",
+    "fs:write-files",
     {
       "identifier": "fs:scope",
       "allow": [

@@ -31,7 +31,6 @@ import {
 import {
     open as openDialog,
     save as saveDialog,
-    confirm as confirmDialog,
 } from "@tauri-apps/plugin-dialog";
 
 import {
@@ -53,6 +52,10 @@ import {
     FilePaneDetailsDialog,
 } from "./FilePaneDetailsDialog";
 
+import type {
+    SftpTransferEntry,
+} from "./transfers/sftp-transfer-types";
+
 interface RemoteFileBrowserProps {
     connectionId: string;
     currentPath: string | null;
@@ -61,6 +64,10 @@ interface RemoteFileBrowserProps {
 
     onPathChange: (
         path: string,
+    ) => void;
+
+    onCopyToOtherPane: (
+        entry: SftpTransferEntry,
     ) => void;
 }
 
@@ -375,6 +382,7 @@ export function RemoteFileBrowser({
     currentPath,
     refreshVersion,
     onPathChange,
+    onCopyToOtherPane,
 }: RemoteFileBrowserProps) {
     const [
         listing,
@@ -1092,8 +1100,8 @@ export function RemoteFileBrowser({
                 Math.min(
                     event.clientX,
                     window.innerWidth -
-                    estimatedWidth -
-                    margin,
+                        estimatedWidth -
+                        margin,
                 ),
             ),
 
@@ -1102,8 +1110,8 @@ export function RemoteFileBrowser({
                 Math.min(
                     event.clientY,
                     window.innerHeight -
-                    estimatedHeight -
-                    margin,
+                        estimatedHeight -
+                        margin,
                 ),
             ),
 
@@ -1133,11 +1141,15 @@ export function RemoteFileBrowser({
         }
     }
 
-    function handleCopyToOtherPane():
-        void {
-        showToast(
-            "Copy to Other Pane will be available in the next transfer milestone.",
-        );
+    function handleCopyToOtherPane(
+        entry: RemoteFileEntry,
+    ): void {
+        onCopyToOtherPane({
+            name: entry.name,
+            path: entry.path,
+            type: entry.type,
+            size: entry.size,
+        });
     }
 
     async function handleUploadFiles(
@@ -1290,13 +1302,13 @@ export function RemoteFileBrowser({
 
         if (
             listing?.path ===
-            parentPath &&
+                parentPath &&
             listing.entries.some(
                 (candidate) =>
                     candidate.name ===
-                    nextName &&
+                        nextName &&
                     candidate.path !==
-                    entry.path,
+                        entry.path,
             )
         ) {
             setErrorMessage(
@@ -1340,30 +1352,18 @@ export function RemoteFileBrowser({
             entry.type === "directory";
 
         const confirmed =
-            await confirmDialog(
+            window.confirm(
                 [
                     isDirectory
                         ? `Delete remote folder "${entry.name}"?`
                         : `Delete remote file "${entry.name}"?`,
-
                     "",
-
                     isDirectory
-                        ? "Only empty remote folders can currently be deleted."
-                        : "This remote file will be permanently deleted.",
-
+                        ? "The server can currently delete only empty folders."
+                        : "This action cannot be undone.",
                     "",
-
                     entry.path,
                 ].join("\n"),
-                {
-                    title:
-                        isDirectory
-                            ? "Delete remote folder?"
-                            : "Delete remote file?",
-
-                    kind: "warning",
-                },
             );
 
         if (!confirmed) {
@@ -1619,7 +1619,7 @@ export function RemoteFileBrowser({
         contextMenu?.entry
             ? [
                 ...(contextMenu.entry.type ===
-                    "directory"
+                "directory"
                     ? [
                         {
                             type: "action" as const,
@@ -1679,9 +1679,11 @@ export function RemoteFileBrowser({
                     icon: (
                         <ArrowLeftRight size={15} />
                     ),
-                    onSelect:
-                        handleCopyToOtherPane,
-                    hint: "Soon",
+                    onSelect: () =>
+                        handleCopyToOtherPane(
+                            contextMenu.entry!,
+                        ),
+                    hint: "Plan",
                 },
                 {
                     type: "separator",
@@ -2228,7 +2230,7 @@ export function RemoteFileBrowser({
                             label: "Size",
                             value:
                                 detailsDialog.entry.type ===
-                                    "directory"
+                                "directory"
                                     ? "—"
                                     : `${formatFileSize(detailsDialog.entry.size)} · ${detailsDialog.entry.size.toLocaleString()} bytes`,
                         },
