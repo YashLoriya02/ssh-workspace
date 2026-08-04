@@ -137,11 +137,19 @@ export interface TransferEventPayload {
     transferId: string;
     connectionId: string;
 
-    direction: "download" | "upload";
+    direction:
+        | "download"
+        | "upload"
+        | "remote-copy";
 
     name: string;
     remotePath: string;
     localPath: string;
+
+    sourceConnectionId?: string;
+    destinationConnectionId?: string;
+    sourceRemotePath?: string;
+    destinationRemotePath?: string;
 
     transferredBytes: number;
     totalBytes: number;
@@ -766,6 +774,38 @@ export class BackendClient {
 
         if (
             response.type !== "transfer.accepted"
+        ) {
+            throw new Error(
+                `Expected transfer.accepted but received ${response.type}.`,
+            );
+        }
+
+        return transferId;
+    }
+
+    async copyRemoteFile(
+        sourceConnectionId: string,
+        destinationConnectionId: string,
+        sourceRemotePath: string,
+        destinationRemotePath: string,
+        overwrite: boolean,
+        transferId: string = crypto.randomUUID(),
+    ): Promise<string> {
+        const response = await this.sendRequest(
+            "transfer.remoteCopy",
+            {
+                transferId,
+                sourceConnectionId,
+                destinationConnectionId,
+                sourceRemotePath,
+                destinationRemotePath,
+                overwrite,
+            },
+        );
+
+        if (
+            response.type !==
+            "transfer.accepted"
         ) {
             throw new Error(
                 `Expected transfer.accepted but received ${response.type}.`,

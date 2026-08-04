@@ -152,7 +152,7 @@ function relativePathIsInside(
 
     return (
         normalizedCandidate ===
-        normalizedParent ||
+            normalizedParent ||
         normalizedCandidate.startsWith(
             `${normalizedParent}/`,
         )
@@ -167,7 +167,8 @@ function getNameFromRelativePath(
             relativePath,
         ).split("/");
 
-    return segments.at(-1) ?? relativePath;
+    return segments.at(-1) ??
+        relativePath;
 }
 
 function isRemoteMissingError(
@@ -330,14 +331,16 @@ export function useSftpTransferManager(
                 return;
             }
 
-            const nextWaiter = conflictQueueRef.current.shift();
+            const nextWaiter =
+                conflictQueueRef.current.shift();
 
             if (!nextWaiter) {
                 setPendingConflict(null);
                 return;
             }
 
-            activeConflictWaiterRef.current = nextWaiter;
+            activeConflictWaiterRef.current =
+                nextWaiter;
 
             setPendingConflict(
                 nextWaiter.conflict,
@@ -354,9 +357,9 @@ export function useSftpTransferManager(
                     (resolve) => {
                         const waiter:
                             ConflictWaiter = {
-                            conflict,
-                            resolve,
-                        };
+                                conflict,
+                                resolve,
+                            };
 
                         if (
                             activeConflictWaiterRef
@@ -392,7 +395,8 @@ export function useSftpTransferManager(
                     return;
                 }
 
-                activeConflictWaiterRef.current = null;
+                activeConflictWaiterRef.current =
+                    null;
                 setPendingConflict(null);
                 waiter.resolve(decision);
 
@@ -480,7 +484,7 @@ export function useSftpTransferManager(
                         currentTransfers.map(
                             (transfer) =>
                                 transfer.id ===
-                                    nextTransfer.id
+                                nextTransfer.id
                                     ? nextTransfer
                                     : transfer,
                         ),
@@ -503,7 +507,7 @@ export function useSftpTransferManager(
                         currentTransfers.map(
                             (transfer) =>
                                 transfer.id ===
-                                    transferId
+                                transferId
                                     ? updater(
                                         transfer,
                                     )
@@ -578,7 +582,7 @@ export function useSftpTransferManager(
 
                             bytesPerSecond =
                                 previousSample.bytesPerSecond >
-                                    0
+                                0
                                     ? (
                                         previousSample.bytesPerSecond *
                                         0.7
@@ -619,7 +623,7 @@ export function useSftpTransferManager(
                             ...transfer,
                             status:
                                 transfer.status ===
-                                    "cancelling"
+                                "cancelling"
                                     ? "cancelling"
                                     : transfer.status ===
                                         "waiting-for-conflict"
@@ -686,8 +690,9 @@ export function useSftpTransferManager(
                 baseTransferredBytes: number,
                 aggregateTotalBytes: number,
                 direction:
-                    "upload" |
-                    "download",
+                    | "upload"
+                    | "download"
+                    | "remote-copy",
             ): BackendTransferWaiter => {
                 let settled = false;
                 let unsubscribe:
@@ -737,9 +742,9 @@ export function useSftpTransferManager(
 
                                         if (
                                             event.type ===
-                                            "transfer.started" ||
+                                                "transfer.started" ||
                                             event.type ===
-                                            "transfer.progress"
+                                                "transfer.progress"
                                         ) {
                                             updateTransferProgress(
                                                 localTransferId,
@@ -747,9 +752,12 @@ export function useSftpTransferManager(
                                                 payload.transferredBytes,
                                                 aggregateTotalBytes,
                                                 direction ===
-                                                    "upload"
+                                                "upload"
                                                     ? "Uploading folder contents…"
-                                                    : "Downloading folder contents…",
+                                                    : direction ===
+                                                        "remote-copy"
+                                                        ? "Streaming folder contents between servers…"
+                                                        : "Downloading folder contents…",
                                             );
                                             return;
                                         }
@@ -1046,10 +1054,10 @@ export function useSftpTransferManager(
             ): Promise<TransferManifestResult> => {
                 const result:
                     TransferManifestResult = {
-                    items: [],
-                    skippedSymlinkCount: 0,
-                    scanErrors: [],
-                };
+                        items: [],
+                        skippedSymlinkCount: 0,
+                        scanErrors: [],
+                    };
 
                 for (const entry of transfer.entries) {
                     checkCancelled(
@@ -1600,12 +1608,16 @@ export function useSftpTransferManager(
                 baseTransferredBytes: number,
                 aggregateTotalBytes: number,
             ): Promise<number> => {
-                let backendTransferId =
+                const backendTransferId =
                     crypto.randomUUID();
 
                 const isUpload =
                     transfer.operation ===
                     "local-to-remote";
+
+                const isRemoteCopy =
+                    transfer.operation ===
+                    "remote-to-remote";
 
                 const waiter =
                     createBackendTransferWaiter(
@@ -1613,9 +1625,11 @@ export function useSftpTransferManager(
                         backendTransferId,
                         baseTransferredBytes,
                         aggregateTotalBytes,
-                        isUpload
-                            ? "upload"
-                            : "download",
+                        isRemoteCopy
+                            ? "remote-copy"
+                            : isUpload
+                                ? "upload"
+                                : "download",
                     );
 
                 let localBackupPath:
@@ -1637,13 +1651,46 @@ export function useSftpTransferManager(
                             currentItemName:
                                 item.name,
                             message:
-                                isUpload
-                                    ? `Uploading ${item.name}…`
-                                    : `Downloading ${item.name}…`,
+                                isRemoteCopy
+                                    ? `Streaming ${item.name} between servers…`
+                                    : isUpload
+                                        ? `Uploading ${item.name}…`
+                                        : `Downloading ${item.name}…`,
                         }),
                     );
 
-                    if (isUpload) {
+                    if (isRemoteCopy) {
+                        if (
+                            transfer.source.source.type !==
+                                "remote" ||
+                            transfer.destination?.source.type !==
+                                "remote"
+                        ) {
+                            throw new Error(
+                                "Both remote endpoints must remain connected during a server-to-server copy.",
+                            );
+                        }
+
+                        if (
+                            replaceExisting &&
+                            destinationInfo?.type ===
+                                "directory"
+                        ) {
+                            await removeRemoteDirectoryForReplacement(
+                                transfer.destination.source.connectionId,
+                                destinationPath,
+                            );
+                        }
+
+                        await backendClient.copyRemoteFile(
+                            transfer.source.source.connectionId,
+                            transfer.destination.source.connectionId,
+                            item.sourcePath,
+                            destinationPath,
+                            replaceExisting,
+                            backendTransferId,
+                        );
+                    } else if (isUpload) {
                         if (
                             transfer.destination?.source.type !==
                             "remote"
@@ -1917,11 +1964,11 @@ export function useSftpTransferManager(
                 const startedAt = Date.now();
                 const control:
                     LocalTransferControl = {
-                    cancelled:
-                        cancelRequestedTransferIdsRef.current.has(
-                            transfer.id,
-                        ),
-                };
+                        cancelled:
+                            cancelRequestedTransferIdsRef.current.has(
+                                transfer.id,
+                            ),
+                    };
 
                 localTransferControlsRef.current.set(
                     transfer.id,
@@ -1934,21 +1981,21 @@ export function useSftpTransferManager(
 
                 const runningTransfer:
                     PreparedSftpTransfer = {
-                    ...transfer,
-                    status: "running",
-                    startedAt,
-                    transferredBytes: 0,
-                    totalBytes: 0,
-                    progressPercent: 0,
-                    bytesPerSecond: 0,
-                    totalFileCount: 0,
-                    completedFileCount: 0,
-                    skippedItemCount: 0,
-                    failedItemCount: 0,
-                    skippedSymlinkCount: 0,
-                    message:
-                        "Scanning selected files and folders…",
-                };
+                        ...transfer,
+                        status: "running",
+                        startedAt,
+                        transferredBytes: 0,
+                        totalBytes: 0,
+                        progressPercent: 0,
+                        bytesPerSecond: 0,
+                        totalFileCount: 0,
+                        completedFileCount: 0,
+                        skippedItemCount: 0,
+                        failedItemCount: 0,
+                        skippedSymlinkCount: 0,
+                        message:
+                            "Scanning selected files and folders…",
+                    };
 
                 progressSamplesRef.current.set(
                     transfer.id,
@@ -2091,7 +2138,7 @@ export function useSftpTransferManager(
 
                         const destinationPath =
                             transfer.destination.source.type ===
-                                "local"
+                            "local"
                                 ? await joinLocalRelativePath(
                                     transfer.destination.directoryPath,
                                     item.relativePath,
@@ -2109,7 +2156,7 @@ export function useSftpTransferManager(
                                     item.name,
                                 message:
                                     item.type ===
-                                        "directory"
+                                    "directory"
                                         ? `Creating ${item.name}…`
                                         : `Copying ${item.name}…`,
                             }),
@@ -2176,7 +2223,7 @@ export function useSftpTransferManager(
                         try {
                             const destinationInfo =
                                 transfer.destination.source.type ===
-                                    "local"
+                                "local"
                                     ? await getLocalDestinationInfo(
                                         destinationPath,
                                     )
@@ -2589,7 +2636,7 @@ export function useSftpTransferManager(
                         currentTransfers.filter(
                             (transfer) =>
                                 transfer.id !==
-                                transferId ||
+                                    transferId ||
                                 [
                                     "running",
                                     "cancelling",

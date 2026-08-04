@@ -11,6 +11,7 @@ import {
   SftpOperationError,
 } from "./ssh/sftp-manager";
 import { TransferManager } from "./ssh/transfer-manager";
+import { RemoteCopyManager } from "./ssh/remote-copy-manager";
 
 interface BackendRequest {
   id: string;
@@ -52,6 +53,11 @@ const sftpManager = new SftpManager(
 );
 
 const transferManager = new TransferManager(
+  sftpManager,
+  sendMessage,
+);
+
+const remoteCopyManager = new RemoteCopyManager(
   sftpManager,
   sendMessage,
 );
@@ -383,6 +389,10 @@ async function handleRequest(
       );
 
       transferManager.cancelForConnection(
+        connectionId,
+      );
+
+      remoteCopyManager.cancelForConnection(
         connectionId,
       );
 
@@ -862,6 +872,62 @@ async function handleRequest(
       return;
     }
 
+    case "transfer.remoteCopy": {
+      const payload = requireRecord(
+        request.payload,
+        "transfer.remoteCopy payload",
+      );
+
+      const transferId = requireString(
+        payload,
+        "transferId",
+      );
+
+      const sourceConnectionId = requireString(
+        payload,
+        "sourceConnectionId",
+      );
+
+      const destinationConnectionId = requireString(
+        payload,
+        "destinationConnectionId",
+      );
+
+      const sourceRemotePath = requireString(
+        payload,
+        "sourceRemotePath",
+      );
+
+      const destinationRemotePath = requireString(
+        payload,
+        "destinationRemotePath",
+      );
+
+      const overwrite = requireBoolean(
+        payload,
+        "overwrite",
+      );
+
+      await remoteCopyManager.startRemoteCopy({
+        transferId,
+        sourceConnectionId,
+        destinationConnectionId,
+        sourceRemotePath,
+        destinationRemotePath,
+        overwrite,
+      });
+
+      sendMessage({
+        id: request.id,
+        type: "transfer.accepted",
+        payload: {
+          transferId,
+        },
+      });
+
+      return;
+    }
+
     case "transfer.cancel": {
       const payload = requireRecord(
         request.payload,
@@ -873,8 +939,15 @@ async function handleRequest(
         "transferId",
       );
 
-      const existed =
+      const existingTransferCancelled =
         transferManager.cancel(transferId);
+
+      const remoteCopyCancelled =
+        remoteCopyManager.cancel(transferId);
+
+      const existed =
+        existingTransferCancelled ||
+        remoteCopyCancelled;
 
       sendMessage({
         id: request.id,
@@ -1143,6 +1216,7 @@ async function handleInputLine(
 
 const clearAll = () => {
   transferManager.cancelAll();
+  remoteCopyManager.cancelAll();
   terminalManager.closeAll();
   sftpManager.closeAll();
   connectionManager.closeAll();

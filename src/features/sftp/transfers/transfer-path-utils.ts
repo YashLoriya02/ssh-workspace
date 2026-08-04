@@ -426,16 +426,6 @@ export function prepareSftpTransfer(
             destinationEndpoint,
         );
 
-    if (operation === "remote-to-remote") {
-        return {
-            ...baseTransfer,
-            operation,
-            status: "blocked",
-            message:
-                "Remote-to-remote streaming is enabled in the next transfer milestone.",
-        };
-    }
-
     return {
         ...baseTransfer,
         operation,
