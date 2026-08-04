@@ -15,7 +15,7 @@ import type {
 
 interface SftpTransferPanelProps {
     transfers:
-        readonly PreparedSftpTransfer[];
+    readonly PreparedSftpTransfer[];
 
     onCancel: (
         transferId: string,
@@ -57,7 +57,7 @@ function formatBytes(
     while (
         value >= 1024 &&
         unitIndex <
-            units.length - 1
+        units.length - 1
     ) {
         value /= 1024;
         unitIndex += 1;
@@ -230,11 +230,11 @@ export function SftpTransferPanel({
         transfers.some(
             (transfer) =>
                 transfer.status !==
-                    "running" &&
+                "running" &&
                 transfer.status !==
-                    "cancelling" &&
+                "cancelling" &&
                 transfer.status !==
-                    "prepared",
+                "prepared",
         );
 
     return (
@@ -279,11 +279,11 @@ export function SftpTransferPanel({
 
                         const canCancel =
                             transfer.status ===
-                                "running" ||
+                            "running" ||
                             transfer.status ===
-                                "waiting-for-conflict" ||
+                            "waiting-for-conflict" ||
                             transfer.status ===
-                                "prepared";
+                            "prepared";
 
                         const showProgress =
                             shouldShowProgress(
@@ -379,13 +379,13 @@ export function SftpTransferPanel({
                                                     )}
                                                     {transfer.totalBytes >
                                                         0 && (
-                                                        <>
-                                                            {" / "}
-                                                            {formatBytes(
-                                                                transfer.totalBytes,
-                                                            )}
-                                                        </>
-                                                    )}
+                                                            <>
+                                                                {" / "}
+                                                                {formatBytes(
+                                                                    transfer.totalBytes,
+                                                                )}
+                                                            </>
+                                                        )}
                                                 </span>
 
                                                 <span>
@@ -403,12 +403,12 @@ export function SftpTransferPanel({
                                                                 : ``}
                                                 </span>
 
-                                                <strong>
+                                                <span style={{ fontSize: "10px" }}>
                                                     {Math.round(
                                                         progressPercent,
                                                     )}
                                                     %
-                                                </strong>
+                                                </span>
                                             </div>
                                         </div>
                                     )}
@@ -421,32 +421,32 @@ export function SftpTransferPanel({
                                         transfer.skippedItemCount > 0 ||
                                         transfer.failedItemCount > 0 ||
                                         transfer.skippedSymlinkCount > 0) && (
-                                        <div className="sftp-transfer-plan__summary">
-                                            {transfer.totalFileCount > 0 && (
-                                                <span>
-                                                    {transfer.completedFileCount}/{transfer.totalFileCount} files
-                                                </span>
-                                            )}
+                                            <div className="sftp-transfer-plan__summary">
+                                                {transfer.totalFileCount > 0 && (
+                                                    <span>
+                                                        {transfer.completedFileCount}/{transfer.totalFileCount} files
+                                                    </span>
+                                                )}
 
-                                            {transfer.skippedItemCount > 0 && (
-                                                <span>
-                                                    {transfer.skippedItemCount} skipped
-                                                </span>
-                                            )}
+                                                {transfer.skippedItemCount > 0 && (
+                                                    <span>
+                                                        {transfer.skippedItemCount} skipped
+                                                    </span>
+                                                )}
 
-                                            {transfer.failedItemCount > 0 && (
-                                                <span>
-                                                    {transfer.failedItemCount} failed
-                                                </span>
-                                            )}
+                                                {transfer.failedItemCount > 0 && (
+                                                    <span>
+                                                        {transfer.failedItemCount} failed
+                                                    </span>
+                                                )}
 
-                                            {transfer.skippedSymlinkCount > 0 && (
-                                                <span>
-                                                    {transfer.skippedSymlinkCount} symlink{transfer.skippedSymlinkCount === 1 ? "" : "s"} ignored
-                                                </span>
-                                            )}
-                                        </div>
-                                    )}
+                                                {transfer.skippedSymlinkCount > 0 && (
+                                                    <span>
+                                                        {transfer.skippedSymlinkCount} symlink{transfer.skippedSymlinkCount === 1 ? "" : "s"} ignored
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                 </div>
 
                                 {canCancel && (
@@ -471,20 +471,20 @@ export function SftpTransferPanel({
 
                                 {transfer.status ===
                                     "cancelling" && (
-                                    <button
-                                        type="button"
-                                        className="sftp-transfer-plan__cancel"
-                                        disabled
-                                        title="Cancelling transfer"
-                                        aria-label={`Cancelling ${transfer.title}`}
-                                    >
-                                        <LoaderCircle
-                                            size={13}
-                                            className="loader"
-                                            aria-hidden="true"
-                                        />
-                                    </button>
-                                )}
+                                        <button
+                                            type="button"
+                                            className="sftp-transfer-plan__cancel"
+                                            disabled
+                                            title="Cancelling transfer"
+                                            aria-label={`Cancelling ${transfer.title}`}
+                                        >
+                                            <LoaderCircle
+                                                size={13}
+                                                className="loader"
+                                                aria-hidden="true"
+                                            />
+                                        </button>
+                                    )}
 
                                 {transfer.status !==
                                     "running" &&
@@ -494,23 +494,23 @@ export function SftpTransferPanel({
                                     "waiting-for-conflict" &&
                                     transfer.status !==
                                     "prepared" && (
-                                    <button
-                                        type="button"
-                                        className="sftp-transfer-plan__dismiss"
-                                        onClick={() =>
-                                            onDismiss(
-                                                transfer.id,
-                                            )
-                                        }
-                                        title="Dismiss transfer"
-                                        aria-label="Dismiss transfer"
-                                    >
-                                        <X
-                                            size={14}
-                                            aria-hidden="true"
-                                        />
-                                    </button>
-                                )}
+                                        <button
+                                            type="button"
+                                            className="sftp-transfer-plan__dismiss"
+                                            onClick={() =>
+                                                onDismiss(
+                                                    transfer.id,
+                                                )
+                                            }
+                                            title="Dismiss transfer"
+                                            aria-label="Dismiss transfer"
+                                        >
+                                            <X
+                                                size={14}
+                                                aria-hidden="true"
+                                            />
+                                        </button>
+                                    )}
                             </article>
                         );
                     },
