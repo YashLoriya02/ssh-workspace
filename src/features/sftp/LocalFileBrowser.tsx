@@ -19,6 +19,7 @@ import {
 } from "@tauri-apps/plugin-fs";
 
 import {
+    openPath,
     revealItemInDir,
 } from "@tauri-apps/plugin-opener";
 
@@ -110,7 +111,7 @@ interface LocalFileBrowserProps {
     draggedEntryPath: string | null;
     isDropEnabled: boolean;
     dropTargetDirectoryPath:
-        string | null;
+    string | null;
     paneSide: "left" | "right";
 
     onEntryPointerDown: (
@@ -1165,21 +1166,34 @@ export function LocalFileBrowser({
         );
     }
 
-    function handleOpenEntry(
+    async function handleOpenEntry(
         entry: LocalFileEntry,
-    ): void {
+    ): Promise<void> {
+        clearTypeSelect();
+        setErrorMessage("");
+
         if (
-            entry.type !==
+            entry.type ===
             "directory"
         ) {
+            onPathChange(
+                entry.path,
+            );
+
             return;
         }
 
-        clearTypeSelect();
-
-        onPathChange(
-            entry.path,
-        );
+        try {
+            await openPath(
+                entry.path,
+            );
+        } catch (error) {
+            setErrorMessage(
+                error instanceof Error
+                    ? error.message
+                    : `Unable to open "${entry.name}".`,
+            );
+        }
     }
 
     async function handleGoUp():
@@ -1299,8 +1313,8 @@ export function LocalFileBrowser({
                 Math.min(
                     event.clientX,
                     window.innerWidth -
-                        estimatedWidth -
-                        margin,
+                    estimatedWidth -
+                    margin,
                 ),
             ),
 
@@ -1309,8 +1323,8 @@ export function LocalFileBrowser({
                 Math.min(
                     event.clientY,
                     window.innerHeight -
-                        estimatedHeight -
-                        margin,
+                    estimatedHeight -
+                    margin,
                 ),
             ),
 
@@ -1654,7 +1668,7 @@ export function LocalFileBrowser({
             ) {
                 event.preventDefault();
 
-                handleOpenEntry(
+                void handleOpenEntry(
                     selectedEntry,
                 );
             }
@@ -1738,21 +1752,27 @@ export function LocalFileBrowser({
         FilePaneContextItem[] =
         contextMenu?.entry
             ? [
+                {
+                    type: "action",
+                    id: "open",
+                    label: "Open",
+                    icon: contextMenu.entry.type ===
+                        "directory"
+                        ? (
+                            <FolderOpen size={15} />
+                        )
+                        : (
+                            <File size={15} />
+                        ),
+                    onSelect: () => {
+                        void handleOpenEntry(
+                            contextMenu.entry!,
+                        );
+                    },
+                },
                 ...(contextMenu.entry.type ===
-                "directory"
+                    "directory"
                     ? [
-                        {
-                            type: "action" as const,
-                            id: "open",
-                            label: "Open",
-                            icon: (
-                                <FolderOpen size={15} />
-                            ),
-                            onSelect: () =>
-                                handleOpenEntry(
-                                    contextMenu.entry!,
-                                ),
-                        },
                         {
                             type: "action" as const,
                             id: "new-folder",
@@ -2201,7 +2221,7 @@ export function LocalFileBrowser({
                                         }
                                         data-sftp-drop-directory={
                                             isDropEnabled &&
-                                            entry.type ===
+                                                entry.type ===
                                                 "directory"
                                                 ? entry.path
                                                 : undefined
@@ -2226,11 +2246,11 @@ export function LocalFileBrowser({
                                                         true,
                                                 });
                                         }}
-                                        onDoubleClick={() =>
-                                            handleOpenEntry(
+                                        onDoubleClick={() => {
+                                            void handleOpenEntry(
                                                 entry,
-                                            )
-                                        }
+                                            );
+                                        }}
                                         onContextMenu={(event) =>
                                             handleContextMenuOpen(
                                                 event,
@@ -2344,7 +2364,7 @@ export function LocalFileBrowser({
                             label: "Size",
                             value:
                                 detailsEntry.type ===
-                                "directory"
+                                    "directory"
                                     ? "—"
                                     : `${formatFileSize(detailsEntry.size)} · ${detailsEntry.size.toLocaleString()} bytes`,
                         },
