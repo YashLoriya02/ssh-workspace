@@ -6,10 +6,12 @@ import {
 } from "react";
 
 import {
+    Copy,
     FolderOpen,
     HardDrive,
     MoreHorizontal,
     RefreshCw,
+    LoaderCircle,
     Server,
     Unplug,
     X,
@@ -18,6 +20,7 @@ import {
 import type {
     SftpPaneSide,
     SftpPaneSource,
+    SftpSavedServerOption,
     SftpServerOption,
 } from "./sftp-types";
 
@@ -38,6 +41,15 @@ interface SftpPaneProps {
 
     source: SftpPaneSource;
     servers: readonly SftpServerOption[];
+    savedServers:
+        readonly SftpSavedServerOption[];
+
+    savedServersLoading: boolean;
+
+    pendingSavedServer:
+        SftpSavedServerOption | null;
+
+    serverConnectionBusy: boolean;
     refreshVersion: number;
 
     onSourceChange: (
@@ -53,8 +65,28 @@ interface SftpPaneProps {
         connectionId: string,
     ) => Promise<void>;
 
+    onSelectSavedServer: (
+        profileId: string,
+    ) => void;
+
     onCopyToOtherPane: (
         entry: SftpTransferEntry,
+    ) => void;
+
+    draggedEntryPath: string | null;
+    isDropEnabled: boolean;
+    paneDropActive: boolean;
+    dropTargetDirectoryPath:
+        string | null;
+
+    onEntryPointerDown: (
+        entry: SftpTransferEntry,
+        pointer: {
+            pointerId: number;
+            clientX: number;
+            clientY: number;
+            button: number;
+        },
     ) => void;
 
     /*
@@ -66,7 +98,13 @@ interface SftpPaneProps {
 
 function getSourceValue(
     source: SftpPaneSource,
+    pendingSavedServer:
+        SftpSavedServerOption | null,
 ): string {
+    if (pendingSavedServer) {
+        return `saved:${pendingSavedServer.id}`;
+    }
+
     if (source.type === "remote") {
         return `remote:${source.connectionId}`;
     }
@@ -74,16 +112,39 @@ function getSourceValue(
     return source.type;
 }
 
+function matchesActiveServer(
+    savedServer: SftpSavedServerOption,
+    activeServer: SftpServerOption,
+): boolean {
+    return (
+        savedServer.host.trim().toLowerCase() ===
+            activeServer.host.trim().toLowerCase() &&
+        savedServer.port === activeServer.port &&
+        savedServer.username.trim() ===
+            activeServer.username.trim()
+    );
+}
+
 export function SftpPane({
     side,
     source,
     servers,
+    savedServers,
+    savedServersLoading,
+    pendingSavedServer,
+    serverConnectionBusy,
     refreshVersion,
     onSourceChange,
     onChooseLocalFolder,
     onClear,
     onDisconnectServer,
+    onSelectSavedServer,
     onCopyToOtherPane,
+    draggedEntryPath,
+    isDropEnabled,
+    paneDropActive,
+    dropTargetDirectoryPath,
+    onEntryPointerDown,
     // onRefresh,
 }: SftpPaneProps) {
     const [
@@ -124,6 +185,18 @@ export function SftpPane({
                     source.connectionId,
             )
             : undefined;
+
+    function isSavedServerConnected(
+        savedServer: SftpSavedServerOption,
+    ): boolean {
+        return servers.some(
+            (activeServer) =>
+                matchesActiveServer(
+                    savedServer,
+                    activeServer,
+                ),
+        );
+    }
 
     useEffect(() => {
         if (!isMenuOpen) {
@@ -178,6 +251,11 @@ export function SftpPane({
         };
     }, [isMenuOpen]);
 
+    const currentDirectoryPath =
+        source.type === "empty"
+            ? null
+            : source.path;
+
     function handleSourceSelect(
         event:
             ChangeEvent<HTMLSelectElement>,
@@ -201,6 +279,23 @@ export function SftpPane({
                 rootPath: null,
                 path: null,
             });
+
+            return;
+        }
+
+        const savedPrefix =
+            "saved:";
+
+        if (
+            value.startsWith(
+                savedPrefix,
+            )
+        ) {
+            onSelectSavedServer(
+                value.slice(
+                    savedPrefix.length,
+                ),
+            );
 
             return;
         }
@@ -261,63 +356,84 @@ export function SftpPane({
     }
 
     const sourceTitle =
-        source.type === "local"
-            ? "Local Computer"
-            : source.type === "remote"
-                ? selectedServer?.title ??
-                "Remote Server"
-                : "No source selected";
+        pendingSavedServer
+            ? pendingSavedServer.name
+            : source.type === "local"
+                ? "Local Computer"
+                : source.type === "remote"
+                    ? selectedServer?.title ??
+                    "Remote Server"
+                    : "No source selected";
 
     const sourceSubtitle =
-        source.type === "local"
-            ? source.path ??
-            "Choose a local folder"
-            : source.type === "remote"
+        pendingSavedServer
+            ? [
+                "Connecting to ",
+                `${pendingSavedServer.username}@${pendingSavedServer.host}`,
+                pendingSavedServer.port !== 22
+                    ? `:${pendingSavedServer.port}`
+                    : "",
+            ].join("")
+            : source.type === "local"
                 ? source.path ??
-                (
-                    selectedServer
-                        ? [
-                            `${selectedServer.username}@${selectedServer.host}`,
+                "Choose a local folder"
+                : source.type === "remote"
+                    ? source.path ??
+                    (
+                        selectedServer
+                            ? [
+                                `${selectedServer.username}@${selectedServer.host}`,
 
-                            selectedServer.port !==
-                                22
-                                ? `:${selectedServer.port}`
-                                : "",
-                        ].join("")
-                        : "Remote session unavailable"
-                )
-                : "Select a source from the dropdown";
+                                selectedServer.port !==
+                                    22
+                                    ? `:${selectedServer.port}`
+                                    : "",
+                            ].join("")
+                            : "Remote session unavailable"
+                    )
+                    : "Select a source from the dropdown";
 
     const sourceIcon =
-        source.type === "local"
+        pendingSavedServer
             ? (
-                <HardDrive
+                <LoaderCircle
+                    className="sftp-pane__connecting-spinner"
                     size={17}
                     aria-hidden="true"
                 />
             )
-            : source.type === "remote"
+            : source.type === "local"
                 ? (
-                    <Server
+                    <HardDrive
                         size={17}
                         aria-hidden="true"
                     />
                 )
-                : (
-                    <FolderOpen
-                        size={17}
-                        aria-hidden="true"
-                    />
-                );
+                : source.type === "remote"
+                    ? (
+                        <Server
+                            size={17}
+                            aria-hidden="true"
+                        />
+                    )
+                    : (
+                        <FolderOpen
+                            size={17}
+                            aria-hidden="true"
+                        />
+                    );
 
     const canRefresh =
+        !pendingSavedServer &&
         (
-            source.type === "local" &&
-            Boolean(source.path)
-        ) ||
-        (
-            source.type === "remote" &&
-            Boolean(selectedServer)
+            (
+                source.type === "local" &&
+                Boolean(source.path)
+            ) ||
+            (
+                source.type === "remote" &&
+                Boolean(selectedServer)
+            )
         );
 
     function handlePaneRefresh():
@@ -354,8 +470,18 @@ export function SftpPane({
     return (
         <section
             className={
-                `sftp-pane ` +
-                `sftp-pane--${source.type}`
+                [
+                    "sftp-pane",
+                    `sftp-pane--${source.type}`,
+                    isDropEnabled
+                        ? "sftp-pane--drop-enabled"
+                        : "",
+                    pendingSavedServer
+                        ? "sftp-pane--connecting-server"
+                        : "",
+                ]
+                    .filter(Boolean)
+                    .join(" ")
             }
             aria-label={
                 `${sideLabel} SFTP pane`
@@ -413,7 +539,10 @@ export function SftpPane({
                         }
                         disabled={
                             source.type ===
-                            "empty"
+                                "empty" ||
+                            Boolean(
+                                pendingSavedServer,
+                            )
                         }
                         title="Clear this pane"
                         aria-label={
@@ -524,10 +653,14 @@ export function SftpPane({
                             value={
                                 getSourceValue(
                                     source,
+                                    pendingSavedServer,
                                 )
                             }
                             onChange={
                                 handleSourceSelect
+                            }
+                            disabled={
+                                serverConnectionBusy
                             }
                             aria-label={
                                 `${sideLabel} pane source`
@@ -573,12 +706,118 @@ export function SftpPane({
                                     )
                                 )}
                             </optgroup>
+
+                            <optgroup label="Saved Servers">
+                                {savedServersLoading ? (
+                                    <option
+                                        value="loading-saved-servers"
+                                        disabled
+                                    >
+                                        Loading saved servers…
+                                    </option>
+                                ) : savedServers.length ===
+                                    0 ? (
+                                    <option
+                                        value="no-saved-servers"
+                                        disabled
+                                    >
+                                        No saved servers
+                                    </option>
+                                ) : (
+                                    savedServers.map(
+                                        (
+                                            savedServer,
+                                        ) => (
+                                            <option
+                                                key={
+                                                    savedServer.id
+                                                }
+                                                value={
+                                                    `saved:${savedServer.id}`
+                                                }
+                                            >
+                                                {savedServer.name}
+                                                {" — "}
+                                                {savedServer.username}
+                                                @
+                                                {savedServer.host}
+                                                {isSavedServerConnected(
+                                                    savedServer,
+                                                )
+                                                    ? " · Connected"
+                                                    : ""}
+                                            </option>
+                                        ),
+                                    )
+                                )}
+                            </optgroup>
                         </select>
                     </div>
                 </label>
             </div >
 
-            <div className="sftp-pane__body">
+            <div
+                className={
+                    paneDropActive
+                        ? "sftp-pane__body sftp-pane__body--drop-active"
+                        : "sftp-pane__body"
+                }
+                data-sftp-pane-drop={
+                    isDropEnabled
+                        ? "true"
+                        : undefined
+                }
+                data-sftp-pane-side={
+                    side
+                }
+                data-sftp-current-directory={
+                    isDropEnabled &&
+                    currentDirectoryPath
+                        ? currentDirectoryPath
+                        : undefined
+                }
+            >
+                {pendingSavedServer && (
+                    <div className="sftp-pane__connection-overlay">
+                        <span>
+                            <LoaderCircle
+                                size={24}
+                                aria-hidden="true"
+                            />
+                        </span>
+
+                        <strong>
+                            Connecting to {pendingSavedServer.name}
+                        </strong>
+
+                        <small>
+                            {pendingSavedServer.username}@{pendingSavedServer.host}
+                            {pendingSavedServer.port !== 22
+                                ? `:${pendingSavedServer.port}`
+                                : ""}
+                        </small>
+                    </div>
+                )}
+
+                {paneDropActive &&
+                    currentDirectoryPath && (
+                        <div
+                            className="sftp-pane__drop-overlay"
+                            aria-hidden="true"
+                        >
+                            <span>
+                                <Copy size={18} />
+                            </span>
+
+                            <strong>
+                                Copy to this folder
+                            </strong>
+
+                            <small>
+                                {currentDirectoryPath}
+                            </small>
+                        </div>
+                    )}
                 {source.type ===
                     "empty" && (
                         <div className="sftp-pane__empty-state">
@@ -595,8 +834,8 @@ export function SftpPane({
 
                             <p>
                                 Open a local folder or
-                                select an active SSH
-                                server.
+                                select an active or saved
+                                SSH server.
                             </p>
                         </div>
                     )}
@@ -629,6 +868,21 @@ export function SftpPane({
                             }
                             onCopyToOtherPane={
                                 onCopyToOtherPane
+                            }
+                            draggedEntryPath={
+                                draggedEntryPath
+                            }
+                            isDropEnabled={
+                                isDropEnabled
+                            }
+                            dropTargetDirectoryPath={
+                                dropTargetDirectoryPath
+                            }
+                            paneSide={
+                                side
+                            }
+                            onEntryPointerDown={
+                                onEntryPointerDown
                             }
                         />
                     ) : (
@@ -696,6 +950,21 @@ export function SftpPane({
                                 onCopyToOtherPane={
                                     onCopyToOtherPane
                                 }
+                                draggedEntryPath={
+                                    draggedEntryPath
+                                }
+                                isDropEnabled={
+                                    isDropEnabled
+                                }
+                                dropTargetDirectoryPath={
+                                    dropTargetDirectoryPath
+                                }
+                                paneSide={
+                                    side
+                                }
+                                onEntryPointerDown={
+                                    onEntryPointerDown
+                                }
                             />
                         ) : (
                             <div className="sftp-pane__empty-state">
@@ -727,8 +996,10 @@ export function SftpPane({
                 </span>
 
                 <span>
-                    {source.type === "empty"
-                        ? "Not connected"
+                    {pendingSavedServer
+                        ? "Connecting securely…"
+                        : source.type === "empty"
+                            ? "Not connected"
                         : source.type === "local"
                             ? "Local filesystem"
                             : "Remote filesystem"}

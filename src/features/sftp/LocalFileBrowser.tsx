@@ -6,6 +6,7 @@ import {
     useState,
     type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
+    type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import {
@@ -20,6 +21,10 @@ import {
 import {
     revealItemInDir,
 } from "@tauri-apps/plugin-opener";
+
+import {
+    confirm as confirmDialog,
+} from "@tauri-apps/plugin-dialog";
 
 import {
     basename,
@@ -53,10 +58,6 @@ import {
 import {
     FilePaneDetailsDialog,
 } from "./FilePaneDetailsDialog";
-
-import {
-    confirm as confirmDialog,
-} from "@tauri-apps/plugin-dialog";
 
 import type {
     SftpTransferEntry,
@@ -104,6 +105,22 @@ interface LocalFileBrowserProps {
 
     onCopyToOtherPane: (
         entry: SftpTransferEntry,
+    ) => void;
+
+    draggedEntryPath: string | null;
+    isDropEnabled: boolean;
+    dropTargetDirectoryPath:
+        string | null;
+    paneSide: "left" | "right";
+
+    onEntryPointerDown: (
+        entry: SftpTransferEntry,
+        pointer: {
+            pointerId: number;
+            clientX: number;
+            clientY: number;
+            button: number;
+        },
     ) => void;
 }
 
@@ -508,6 +525,11 @@ export function LocalFileBrowser({
     onPathChange,
     onChooseFolder,
     onCopyToOtherPane,
+    draggedEntryPath,
+    isDropEnabled,
+    dropTargetDirectoryPath,
+    paneSide,
+    onEntryPointerDown,
 }: LocalFileBrowserProps) {
     const [
         entries,
@@ -1277,8 +1299,8 @@ export function LocalFileBrowser({
                 Math.min(
                     event.clientX,
                     window.innerWidth -
-                    estimatedWidth -
-                    margin,
+                        estimatedWidth -
+                        margin,
                 ),
             ),
 
@@ -1287,8 +1309,8 @@ export function LocalFileBrowser({
                 Math.min(
                     event.clientY,
                     window.innerHeight -
-                    estimatedHeight -
-                    margin,
+                        estimatedHeight -
+                        margin,
                 ),
             ),
 
@@ -1318,15 +1340,83 @@ export function LocalFileBrowser({
         }
     }
 
-    function handleCopyToOtherPane(
+    function createTransferEntry(
         entry: LocalFileEntry,
-    ): void {
-        onCopyToOtherPane({
+    ): SftpTransferEntry {
+        return {
             name: entry.name,
             path: entry.path,
             type: entry.type,
             size: entry.size,
-        });
+        };
+    }
+
+    function handleCopyToOtherPane(
+        entry: LocalFileEntry,
+    ): void {
+        onCopyToOtherPane(
+            createTransferEntry(entry),
+        );
+    }
+
+    function handleEntryPointerDown(
+        event:
+            ReactPointerEvent<HTMLTableRowElement>,
+        entry: LocalFileEntry,
+    ): void {
+        if (
+            isMutating ||
+            event.button !== 0
+        ) {
+            return;
+        }
+
+        const target =
+            event.target;
+
+        if (
+            target instanceof Element &&
+            target.closest(
+                "input, select, textarea, [contenteditable='true']",
+            )
+        ) {
+            return;
+        }
+
+        setSelectedPath(entry.path);
+
+        onEntryPointerDown(
+            createTransferEntry(entry),
+            {
+                pointerId:
+                    event.pointerId,
+                clientX:
+                    event.clientX,
+                clientY:
+                    event.clientY,
+                button:
+                    event.button,
+            },
+        );
+    }
+
+    function getLocalRowClassName(
+        entry: LocalFileEntry,
+    ): string {
+        return [
+            "local-file-row",
+            selectedPath === entry.path
+                ? "local-file-row--selected"
+                : "",
+            draggedEntryPath === entry.path
+                ? "local-file-row--dragging"
+                : "",
+            dropTargetDirectoryPath === entry.path
+                ? "local-file-row--drop-target"
+                : "",
+        ]
+            .filter(Boolean)
+            .join(" ");
     }
 
     async function handleRevealPath(
@@ -1649,7 +1739,7 @@ export function LocalFileBrowser({
         contextMenu?.entry
             ? [
                 ...(contextMenu.entry.type ===
-                    "directory"
+                "directory"
                     ? [
                         {
                             type: "action" as const,
@@ -2098,10 +2188,31 @@ export function LocalFileBrowser({
                                             }
                                         }}
                                         className={
-                                            selectedPath ===
-                                                entry.path
-                                                ? "local-file-row local-file-row--selected"
-                                                : "local-file-row"
+                                            getLocalRowClassName(
+                                                entry,
+                                            )
+                                        }
+                                        aria-grabbed={
+                                            draggedEntryPath ===
+                                            entry.path
+                                        }
+                                        data-sftp-pane-side={
+                                            paneSide
+                                        }
+                                        data-sftp-drop-directory={
+                                            isDropEnabled &&
+                                            entry.type ===
+                                                "directory"
+                                                ? entry.path
+                                                : undefined
+                                        }
+                                        onPointerDown={(
+                                            event,
+                                        ) =>
+                                            handleEntryPointerDown(
+                                                event,
+                                                entry,
+                                            )
                                         }
                                         onClick={() => {
                                             setSelectedPath(
@@ -2233,7 +2344,7 @@ export function LocalFileBrowser({
                             label: "Size",
                             value:
                                 detailsEntry.type ===
-                                    "directory"
+                                "directory"
                                     ? "—"
                                     : `${formatFileSize(detailsEntry.size)} · ${detailsEntry.size.toLocaleString()} bytes`,
                         },

@@ -7,6 +7,7 @@ import {
     type FormEvent,
     type KeyboardEvent as ReactKeyboardEvent,
     type MouseEvent as ReactMouseEvent,
+    type PointerEvent as ReactPointerEvent,
 } from "react";
 
 import {
@@ -68,6 +69,22 @@ interface RemoteFileBrowserProps {
 
     onCopyToOtherPane: (
         entry: SftpTransferEntry,
+    ) => void;
+
+    draggedEntryPath: string | null;
+    isDropEnabled: boolean;
+    dropTargetDirectoryPath:
+        string | null;
+    paneSide: "left" | "right";
+
+    onEntryPointerDown: (
+        entry: SftpTransferEntry,
+        pointer: {
+            pointerId: number;
+            clientX: number;
+            clientY: number;
+            button: number;
+        },
     ) => void;
 }
 
@@ -383,6 +400,11 @@ export function RemoteFileBrowser({
     refreshVersion,
     onPathChange,
     onCopyToOtherPane,
+    draggedEntryPath,
+    isDropEnabled,
+    dropTargetDirectoryPath,
+    paneSide,
+    onEntryPointerDown,
 }: RemoteFileBrowserProps) {
     const [
         listing,
@@ -1141,15 +1163,83 @@ export function RemoteFileBrowser({
         }
     }
 
-    function handleCopyToOtherPane(
+    function createTransferEntry(
         entry: RemoteFileEntry,
-    ): void {
-        onCopyToOtherPane({
+    ): SftpTransferEntry {
+        return {
             name: entry.name,
             path: entry.path,
             type: entry.type,
             size: entry.size,
-        });
+        };
+    }
+
+    function handleCopyToOtherPane(
+        entry: RemoteFileEntry,
+    ): void {
+        onCopyToOtherPane(
+            createTransferEntry(entry),
+        );
+    }
+
+    function handleEntryPointerDown(
+        event:
+            ReactPointerEvent<HTMLTableRowElement>,
+        entry: RemoteFileEntry,
+    ): void {
+        if (
+            isMutating ||
+            event.button !== 0
+        ) {
+            return;
+        }
+
+        const target =
+            event.target;
+
+        if (
+            target instanceof Element &&
+            target.closest(
+                "input, select, textarea, [contenteditable='true']",
+            )
+        ) {
+            return;
+        }
+
+        setSelectedPath(entry.path);
+
+        onEntryPointerDown(
+            createTransferEntry(entry),
+            {
+                pointerId:
+                    event.pointerId,
+                clientX:
+                    event.clientX,
+                clientY:
+                    event.clientY,
+                button:
+                    event.button,
+            },
+        );
+    }
+
+    function getRemoteRowClassName(
+        entry: RemoteFileEntry,
+    ): string {
+        return [
+            "sftp-remote-file-row",
+            selectedPath === entry.path
+                ? "sftp-remote-file-row--selected"
+                : "",
+            draggedEntryPath === entry.path
+                ? "sftp-remote-file-row--dragging"
+                : "",
+            dropTargetDirectoryPath === entry.path
+                ? "sftp-remote-file-row--drop-target"
+                : "",
+        ]
+            .filter(Boolean)
+            .join(" ");
     }
 
     async function handleUploadFiles(
@@ -2086,10 +2176,31 @@ export function RemoteFileBrowser({
                                             }
                                         }}
                                         className={
-                                            selectedPath ===
-                                                entry.path
-                                                ? "sftp-remote-file-row sftp-remote-file-row--selected"
-                                                : "sftp-remote-file-row"
+                                            getRemoteRowClassName(
+                                                entry,
+                                            )
+                                        }
+                                        aria-grabbed={
+                                            draggedEntryPath ===
+                                            entry.path
+                                        }
+                                        data-sftp-pane-side={
+                                            paneSide
+                                        }
+                                        data-sftp-drop-directory={
+                                            isDropEnabled &&
+                                            entry.type ===
+                                                "directory"
+                                                ? entry.path
+                                                : undefined
+                                        }
+                                        onPointerDown={(
+                                            event,
+                                        ) =>
+                                            handleEntryPointerDown(
+                                                event,
+                                                entry,
+                                            )
                                         }
                                         onClick={() => {
                                             setSelectedPath(

@@ -71,21 +71,6 @@ const initialWorkspaceState:
   activeConnectionId: null,
 };
 
-
-const MIN_DISCONNECT_JOURNEY_MS =
-  1_200;
-
-function wait(
-  durationMs: number,
-): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(
-      resolve,
-      durationMs,
-    );
-  });
-}
-
 function workspaceReducer(
   state: WorkspaceState,
   action: WorkspaceAction,
@@ -317,6 +302,20 @@ function AppRoutes() {
       [navigate],
     );
 
+  const handleSftpConnected =
+    useCallback(
+      (
+        workspace:
+          ConnectedWorkspaceDetails,
+      ): void => {
+        dispatchWorkspace({
+          type: "add",
+          session: workspace,
+        });
+      },
+      [],
+    );
+
   const handleSelectSession =
     useCallback(
       (
@@ -373,16 +372,6 @@ function AppRoutes() {
           },
         );
 
-        const journeyStartedAt =
-          performance.now();
-
-        /*
-         * Give React one brief paint opportunity so the
-         * disconnect animation is visible before the
-         * backend closes the channel.
-         */
-        await wait(40);
-
         try {
           await backendClient.disconnectSsh(
             connectionId,
@@ -393,18 +382,6 @@ function AppRoutes() {
             error,
           );
         } finally {
-          const elapsedJourneyMs =
-            performance.now() -
-            journeyStartedAt;
-
-          await wait(
-            Math.max(
-              0,
-              MIN_DISCONNECT_JOURNEY_MS -
-              elapsedJourneyMs,
-            ),
-          );
-
           dispatchWorkspace({
             type: "remove",
             connectionId,
@@ -686,6 +663,9 @@ function AppRoutes() {
                 onDisconnectServer={
                   handleCloseSession
                 }
+                onServerConnected={
+                  handleSftpConnected
+                }
               />
             }
           />
@@ -812,16 +792,8 @@ function AppRoutes() {
                           </span>
 
                           <span
-                            className={
-                              isClosing
-                                ? "workspace-tab__status workspace-tab__status--disconnecting"
-                                : "workspace-tab__status"
-                            }
-                            title={
-                              isClosing
-                                ? "Disconnecting…"
-                                : "Connected"
-                            }
+                            className="workspace-tab__status"
+                            title="Connected"
                           />
                         </button>
 
@@ -889,9 +861,6 @@ function AppRoutes() {
                         connectionId={
                           session.connectionId
                         }
-                        title={
-                          session.title
-                        }
                         host={
                           session.host
                         }
@@ -904,11 +873,6 @@ function AppRoutes() {
                         isActive={
                           isSessionsRoute &&
                           isActive
-                        }
-                        isDisconnecting={
-                          closingConnectionIds.has(
-                            session.connectionId,
-                          )
                         }
                         onDisconnected={
                           handleDisconnected

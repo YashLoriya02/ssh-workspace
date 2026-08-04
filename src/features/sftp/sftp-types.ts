@@ -7,6 +7,22 @@ export interface SftpServerOption {
     username: string;
 }
 
+export type SftpSavedAuthenticationType =
+    | "password"
+    | "privateKey";
+
+export interface SftpSavedServerOption {
+    id: string;
+    name: string;
+
+    host: string;
+    port: number;
+    username: string;
+
+    authenticationType:
+        SftpSavedAuthenticationType;
+}
+
 export type SftpPaneSource =
     | {
         type: "empty";
