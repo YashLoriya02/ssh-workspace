@@ -1798,7 +1798,7 @@ export function SshConnectionTest({
                 <header className="ssh-header">
                     <div>
                         <p className="eyebrow">SSH Workspace</p>
-                        <h1>SSH Connection Test</h1>
+                        <h1>SSH Connection</h1>
                         <p className="subtitle">
                             Connect to a remote server before opening
                             the terminal.
